@@ -1,0 +1,204 @@
+# Aplicación a Datos Reales
+
+## Filtro Hampel y tratamiento de Series de Tiempo. {#sec-exp}
+
+Existen datos faltantes y outliers en cada serie de tiempo, esto requiere un tratamiento para limpiar estos datos, *pulirlos* de tal forma de crear objetos que almacenen en si la esencia de cada serie de tiempo así como también sean sencillos de manejar para hacer clustering, este trabajo implica probablemente el proceso más tedioso del trabajo total, pues se pretende reducir moralmente la dimensionalidad del problema obteniendo series de tiempo las cuales podamos analizar fácilmente y después de esto a cada serie de tiempo aplicarle un *feature extraction*, para solucionar el problema de datos faltantes y facilitar el aprendizaje no supervizado. Con el objetivo de comprimir se comprimieron, almacenaron y se leyeron archivos con extensión *.gzip*. Un archivo con extensión ".gzip" es un archivo comprimido usando el algoritmo de compresión Gzip (GNU zip). Gzip es un formato y un software de compresión que se utiliza comúnmente en sistemas Unix y Linux para reducir el tamaño de los archivos, en nuestro caso el sistema operativo usado fue Windows, existe en la librería *pandas* del software Python usada para el manejo de bases de datos en Python, la forma de especificar que los archivos son de esta extensión para su lectura. No estudiaremos como funciona Gzip pero si destacamos que hemos usado esta compresión en los archivos analizados y que la reducción del peso en memoria es sustancial.
+
+Se tienen un aproximado de $349.200.000$ de series de tiempo considerando los $291$ departamentos agrícolas y los $6$ años distintos que analizamos. Se dispone de una cantidad abrumadora de datos, por lo que por primera manipulación se eliminan manualmente las filas (es decir las series de tiempo) con una cantidad de valores no disponibles o *missing values* mayor al $80 \%$, después por cada fila de cada departamento-año filtramos y eliminamos valores atípicos usando el método hampel @sec-filtro_hampel, este filtro como se explicó pretende eliminar la mayor cantidad de los outliers del NDVI y reemplazan los valores atípicos detectados por un valor no disponible. Se intentó hacer imputación mediante regresión lineal para lidiar con valores faltantes en las series de tiempo, pero por razones de alta eficiencia temporal (siempre considerando la gigantesca cantidad de series de tiempo a tratar), la no reducción de la dimensionalidad y el riesgo de generar imputaciones defectuosas dada posibilidad de que se *escapen* valores atípicos que el filtro Hampel no pueda detectar no terminamos optando por esta alternativa.
+
+A continuación presentamos dos series de tiempo que representan la problemática de tener observaciones con pocos datos (enorme cantidad de valores atípicos) @fig-faltantes e instancias ruidosas @fig-ruidosas.
+
+![Serie de tiempo con muchos valores faltantes, partido de Gonzáles Chaves de la Provincia de Buenos Aires.](valoresfaltantes.jpeg){#fig-faltantes width=100%}
+
+![Serie de tiempo con ruido considerable, partido de Adolfo Alsina de la Provincia de Buenos Aires.](ruidosa.jpeg){#fig-ruidosas width=100%}
+
+Por distintas pruebas realizadas con el filtro Hampel para series de tiempo de datos reales los parámetros escogidos como tamaño de ventana y umbral son $3$ y $2.5$ respectivamente, no se puede garantizar que la efectividad del filtro Hampel sea perfecta dada la excesiva cantidad de series de tiempo, pero su uso se hace imperativo para limpiar el ruido y generar series de tiempo más confiables. Las series de tiempo filtradas forman otro dataset por departamento-año, estas nuevos datasets se conforman con series de tiempo que al ser filtradas usando Hampel pueden tener una cantidad de valores faltantes mayor al $80 \%$  (pues se reemplazó el valor atípico por un valor faltante), por lo que una vez más desechamos manualmente series de tiempo con un porcentaje de valores no disponibles mayor al $80 \%$ obteniendo de esta forma series de tiempo filtradas con Hampel y con filas en las que tengamos por lo menos un porcentaje mayor al $20 \%$ de valores numéricos del índice NDVI con series de tiempo realmente representativas para un posterior proceso de aprendizaje. 
+
+Notemos que se han eliminado filas antes y después de aplicar el filtro Hampel pues estas pueden contener en ambos casos pocos valores del índice NDVI y al intentar aplicar feature extraction y hacer clustering los modelos pueden sufrir innecesariamente, además las series de tiempo desechadas son poco representativas, obteniendo así por cada departamento-año *datasets* mucho más livianos en términos de memoria, haciendo de esta forma una primera reducción de la complejidad espacio-temporal del problema y llegando a series de tiempo más convenientes para extraer conclusiones. 
+
+Una vez obtenidas las series de tiempo *aceptables* se intentará solucionar el problema de los datos faltantes y además se reducirá la dimensionalidad de cada base de datos asociando cada fila es decir, cada serie de tiempo, con una función de fiteo cuyos parámetros almacenaremos en tuplas de $8$ números reales, estas tuplas definen una función de una sola variable que fitea la serie de tiempo, todo esto siempre con el propósito de que el clustering que se realiza al final se lleve a cabo de una manera mucho mas eficiente y se propague el menor error posible. Obteniéndose de esta manera por departamento-año su base de datos representantiva de parámetros, existen departamentos para los cuales no se requirió llevar a cabo la extracción de parámetros pues para estos la cantidad de filas era bastante insignificante para considerar hacer clustering, la mayoría de estos datasets corresponden al año $2017$ por ejemplo el partido de Villa Gesell de la provincia de Buenos Aires, el departamento de General Donovan de la provincia del Chaco, el departamento Catriló de la provincia del Chaco, entre otros. Para el año 2021 el partido al que no se aplicó extracción de parámetros fue el partido de la Costa de la Provincia de Buenos Aires. 
+
+Se llevan a cabo GMM (clustering no robusto) y TCLUST (clustering Robusto). Para cada departamento y cada año se obtienen los centroides con $K=6$, cada centroide es el representante mas natural de cada aglomeración y de estos centroides detectamos cual de ellos es el trigo, según la información de campo.
+
+Se clasifica el trigo en los centroides creados con las series de tiempo que alcanzan el pico de indice NDVI dentro de los meses de finales de Agosto, Septiembre, Ocutubre, y comienzos de Noviembre, los mínimos deben estar en los meses de Junio, julio y finales de la primavera. Según los datos historicos del comportamiento de la siembra, cosecha y cultivo del trigo se planta la semilla en los meses de junio y julio y se alcanza el pico a finales de invierno y durante la primavera [@molfese2020production] . Por conocimientos de campo se establece una cantidad fija de agrupaciones $K=6$ para todos los departamentos finalmente clusterizados. 
+
+La metodología a seguir es la siguiente:
+
+1. *Recopilación de Datos*: Extracción de los datos satelitáles por año y por departamento de la Pampa Argentina con el uso de la Nube AWS, así como la obtención de los datos históricos de superficies de trigo cultivadas por departamento-año.  
+
+2. *Limpieza de Datos*: Filtración de valores atípicos en series de tiempo usando el filtro Hampel y el descarte de series de tiempo con una cantidad de valores faltantes mayor al $80 \%$, tanto antes como después de aplicar el filtro Hampel.
+
+3. *Feature Extraction*: Extracción de parámetros con el fiteo Splines-TRF, para cada departamento-año se realiza el fiteo Splines-TRF. Es decir, para cada observación (serie de tiempo) se obtienen los $8$ parámetros por Splines-TRF que representan la serie de tiempo.
+
+4. *Clustering de Series de Tiempo $k = 6$*: Clusterización tanto robusta como no robusta. Para cada departamento y cada año se obtienen los centroides de cada cluster, es decir el representante de la serie de tiempo asociada a cada aglomeración.
+
+5. *Clasificación del Trigo*: Cada centroide obtenido del clustering es una curva representada por una tupla de $8$ parámetros, se tomarán las curvas que cumplan con el requisito de *ser trigo*, esto es que tengan picos mayores a un índice de $0.6$ en los meses de agosto hasta finales de octubre y además tengan valores menores a $0.4$ en los otros meses. Se almacena la agrupación de esas curvas para después consultar la proporción. En el caso de no existir una curva que cumpla con los requisitos de *ser trigo* la proporción estimada de Trigo cultivada en ese departamento-año será nula.
+
+5. *Estimación de Proporciones*: Una vez obtenida la agrupación correspondiente al trigo (en caso de no exitir la proporción estimada será nula) se calculará la proporción de observaciones que pertenecen a ese cluster, haciendo el promedio aritmético entre la cantidad de series de tiempo que están en ese cluster dividido sobre la cantidad de observaciones totales.
+
+El algoritmo de clustering robusto aplicado en esta tesis es el TCLUST pues es el que funcionó mejor de datos simulados entre los algoritmos de clustering robusto revisados (PAM y TCLUST) y además porque la eliminación de observaciones en el proceso de aprendizaje (Trimming) es una gran ventaja en cuanto a la eficiencia y purificación obteniendo así las series de tiempo realmente representativas, que son los centroides de cada aglomeración, la explicación del funcionamiento de la función *tclust* del software estadístico R-Studio, se encuentra disponible en [@fritz2012tclust] . Escoger un adecuado valor de podado $\alpha$ es un proceso de prueba y error y en nuestro caso es un problema de profunda dificultad pues se lleva a cabo esta clusterización para más de doscientas bases de datos y se hace necesario fijar un valor único de podado para todos los departamentos, evidentemente no se tiene control de cual es el parámetro de podado más adecuado para cada departamento particular, porque no se tiene noción del ruido en cada departamento por la complejidad misma del problema., existen esfuerzos en la literatura donde se intenta determinar el valor más apropiado de valor de podado [@fritz2012tclust].
+
+Existe una importante reducción de la dimensionalidad en cada paso a modo de ilustración se muestra el siguiente diagrama @fig-mermaid-flowchart. En cada paso del proceso se ha llevado a cabo una importante reducción de memoria y de los datos, reduciendo así el tiempo de ejecución.
+
+![Diagrama del Procedimiento general, junto con la reducción de la memoria que se lleva a cabo en el proceso, 1TB = 1000GB.](Diagrama_tesis.jpeg){#fig-mermaid-flowchart width=100%}
+
+Por último es de importancia mencionar que no se tienen conocimientos de campo para varios departamentos, es decir no se disponen datos reales de la superficie cultivada de trigo para algunos departamentos del país, y para estos no fue posible establecer una comparación entre lo que predijo el modelo y la proporción real. Se pudo por lo tanto comparar $220$ departamentos del país, lo cual sigue siendo una cantidad de superficie bastante considerable. 
+
+## Fiteos y Extracción de Parámetros.
+
+Conociendo los métodos de fiteo presentados en esta tesis para hacer feature extraction de la considerable cantidad de series de tiempo, mostraremos en esta sección el comportamiento de los métodos en algunas series de tiempo de datos reales y se mostrará cual ha sido escogido, dependiendo de su capacidad explicativa considerando de primordial importancia la robustez asi como también la complejidad de los métodos. Daremos gráficos de series de tiempo con sus respectivos fiteos, usando Smoothing Splines y Splines-TRF.
+
+Es importante recordar que el fiteo Smooth Splines precisa un parámetro de suavizado $s$, que como se explicó en @sec-SS encontrar el más adecuado es un proceso de prueba y error, un "buen" valor de $s$ es esperable que se encuentre entre $m-\sqrt{2m}$ y $m+\sqrt{2m}$, donde $m$ es el número de datos. Si todos los pesos son iguales a uno, una opción razonable será estimar $s \sim m\hat{\sigma}^{2}$, donde $\hat{\sigma}$ es un estimado de la desviación estándar de los datos. En nuestro caso escogeremos $\hat{\sigma} = 1.4826MAD$. La desviación estándar robusta definida en el capitulo 2 @sec-SS. Establecer un *correcto* valor de $s$ desmotiva a seguir la alternativa de Smooth Splines pues es necesario dada la complejidad del problema mantener este parámetro uniforme en las millones series temporales que se presentan, si bien en algunos casos se pueden generar fiteos aceptables, en otros casos se pueden tener representaciones poco confiables, y este riesgo no estamos dispuestos a asumirlo. Notar que hemos usado como parámetro $s$ en Smoothing splines la estimación recomendada $s \sim mMAD^2$.
+
+```{python}
+#| echo: false
+import numpy as np
+import pandas as pd
+from datetime import date, datetime
+import matplotlib.pyplot as plt
+from unidecode import unidecode 
+from scipy.optimize import curve_fit
+import scipy.interpolate as interpolate
+from scipy import interpolate 
+import matplotlib.pyplot as plt
+from scipy.interpolate import splrep, BSpline
+from scipy.interpolate import CubicSpline, UnivariateSpline, splrep, splev, BSpline
+```
+
+```{python}
+#| echo: false
+def robust_std(data):
+    median = np.median(data)
+    abs_deviation = np.abs(data - median)
+    mad = np.median(abs_deviation)
+    robust_std = mad * 1.4826
+    return robust_std
+```
+
+```{python}
+#| echo: false
+# este codigo puede ser que se elimine
+def spline_n_params(x, p1, p2, p3, p4, p5, p6, p7, p8):
+    t = np.linspace(0, 70, 8)
+    p = CubicSpline(t, [p1, p2, p3, p4, p5, p6, p7, p8], 
+                        bc_type="natural")
+    return p(x)
+
+def fit_spline_trf(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    p0 = [0.5] * 8
+    bounds = (0, [1.] * 8)
+    try:
+        popt, pcov = curve_fit(spline_n_params, x_no_nan, 
+                               y_no_nan, p0=p0, bounds=bounds, 
+                               method="trf")
+        return popt
+    except:
+        return np.nan * np.ones(len(p0))
+
+def fit_smooth_spline(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    sd_mad = len(y_no_nan)*(robust_std(y_no_nan)**2)
+    tck = splrep(x_no_nan, y_no_nan, s = sd_mad)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+```
+
+Observaremos en @fig-figura4.1 una mejor adaptación del fiteo Splines-TRF asi como la ingente necesidad de aplicar el filtro hampel pues como se observa como la existencia de dos valores atípicos sesga los fiteos en ambos métodos, el escenario ideal es en el que se observa un filtrado previo (serie de tiempo filtrada con Hampel) y usando el fiteo Splines-TRF, optar por la otra alternativa puede propagar un error nocivo para el análisis cluster y de esta manera crear predicciones del trigo bastante erradas. Se observan los dos fiteos, aplicados a series de tiempo con datos reales y datos filtrados con el Método Hampel, y se ve una mejor capacidad de Splines-TRF para descibir la serie de tiempo. Asi como una mejor tolerancia a los valores atípicos que puedan llegar a presentarse, @fig-figura4.1.
+
+```{python}
+#| echo: false
+#| label: fig-figura4.1
+#| fig-cap: "Fiteos Smooth Splines y TRF para datos de la serie de tiempo del índice NDVI del partido Adolfo Alsina provincia de Buenos Aires y datos filtrados con el método Hampel."
+#| fig-width: 0.5
+df_21 = pd.read_csv('prueba_datos_reales.csv.gzip',compression='gzip')
+params = pd.read_csv('prueba_params.csv.gzip',compression='gzip')
+hampel = pd.read_csv('prueba_hampel.csv.gzip',compression='gzip')
+hampel.columns = [col[5:10] for col in hampel.columns]
+index = 0 
+xdata= np.linspace(0, 70, 35)
+popt = params.iloc[index].to_list() 
+df_row = df_21.iloc[index] 
+hampel_row = hampel.iloc[index] 
+x_fit = np.arange(len(df_21.iloc[index])) 
+y_fit = spline_n_params(x_fit, *popt)
+popt_with_outliers = fit_spline_trf(df_row)
+y_fit_with_outliers = spline_n_params(x_fit, *popt_with_outliers)
+xref = np.linspace(0, 70, 8)
+plt.figure(figsize=(7.5,6))
+plt.plot(hampel.columns, df_row.values, 'r.', label='Original Data')
+plt.plot(hampel.columns, hampel_row.values, 'b.', label='Hampel Data')
+plt.plot(hampel.columns, y_fit, 'b-', label='Hampel Curve TRF')
+plt.plot(hampel.columns, y_fit_with_outliers, 'r-', label='Original data TRF')
+plt.plot(hampel.columns, fit_smooth_spline(hampel_row), 'b--', label='Hampel Curve Smooth')
+plt.plot(hampel.columns, fit_smooth_spline(df_row), 'r--', label='Original data Smooth')
+plt.xticks(rotation=45, ticks=hampel.columns[::2])
+plt.ylabel('Indice NDVI')
+plt.legend(loc="upper right")
+plt.title('Fiteos TRF vs Smoothing Splines año 2021')
+plt.ylim(0,1)
+plt.show()
+```
+
+Para datos previamente filtrados con hampel analizaremos la @fig-trfvssmooth para una serie de tiempo del departamento Adolfo Alsina de la provincia de Buenos Aires año 2021 como se comportan los fiteos para Splines-TRF y Smooth Splines con dos distintos valores de parámetro de suavizado $s$, es importante remarcar que no se logró detectar un valor que parece ser atípico en la serie de tiempo y para este panomara un fiteo robusto es lo más ideal, vemos que Splines-TRF es efectivamente mejor.  
+
+![Fiteos de Smooth Splines y Splines-TRF para una serie de tiempo del indice NDVI del departamento Adolfo Alsina de la Provincia de Buenos Aires. Se presencia una serie de tiempo representativa del trigo.](grafica_fiteos.png){#fig-trfvssmooth width=110%}
+
+Observamos la mayor capacidad del Método Splines-TRF para describir la serie de tiempo y también para lidiar con el ruido perjudicial (color verde), el fiteo Smooth Splines no genera resultados muy convincentes tanto para un parámetro de suavizado muy chico $s=0$, como para el recomendado en la @sec-SS definido como $s=m\hat{\sigma}^{2}$, para un parámetro de suavizado igual a cero se obtiene un fiteo que ni siquiera cumple con las condiciones de borde (pues $0 \leq NDVI \leq 1$) en color rojo, y para el parámetro de suavizado recomendado no se describe adecuadamente la serie de tiempo (en color azul). El índice NDVI lo analizamos entre cero y uno pues para valores negativos tenemos nubes y agua como se mencionó en el la introducción de este trabajo @sec-ndvi.
+
+El gráfico de la serie de tiempo con los fiteos estudiados @fig-trfvssmooth parece ser del cultivo del trigo pues su pico se manifiesta en los meses de invierno. Esta serie de tiempo fue tomada del departamento de Adolfo Alsina de la provincia de Buenos Aires en el año 2021.
+
+## Resultados con Clustering Robusto y No Robusto
+
+Llevaremos a cabo TCLUST con parámetros fijos de $K = 6$ y $\alpha = 0.10$, el parámetro $c$ lo tomamos igual a $10$ las matrices de covarianzas se asumen por supuesto también distintas, por supesto que consideramos que cada cluster no tiene porque tener la misma cantidad de observaciones, además la cantidad máxima de iteraciones la tomamos igual a $150$. Como se explicó en @sec-trimming el parámetro $\alpha$ representa la proporción de observaciones que podaremos y son consideradas parte del ruido. La cantidad de clusters está fijada por conocimientos de campo como se mencionó anteriormente @sec-exp. El parámetro $c$ determinaba el cociente entre el autovalor más grande y el autovalor más pequeño de las matrices de covarianzas, con lo que mide que tan diferentes pueden ser las formas de los clusters. Salvo la cantidad de agrupaciones los parámetros de la función $tclust$ fueron tomados manualmente. Se lleva a cabo el clustering para departamentos con más de $100$ filas pues para menos observaciones no consideramos que se tenga una región representativa del espacio geográfico, existen departamentos a los cuales se les aplicó todo el proceso de limpieza (Filtro Hampel, eliminación manual de filas con más de un $80 \%$ ) y despues extracción de parámetros y terminaron con menos de $100$ observaciones, esto puede ser explicado porque son departamentos cuya superficie territorial no es muy considerable (y por lo tanto son bases de datos livianas con pocas filas) o porque los datos de índice NDVI en esos sitios son demasiado problemáticos (por errores de medición del satélite, nubes que bajan el índice NDVI o cualquier otro problema que no podamos controlar) o por las dos causas a la vez. La idea es ejecutar el aprendizaje en zonas donde existan datos *confiables* y no se gaste innecesariamente tiempo de corrida estimando resultados que no puedan ser del todo fiables.
+
+Se presentarán las proporciones estimadas y las reales para el año 2021 en todos los departamentos analizados de este año. Analizando la @fig-nubeprops2021 se ve una marcada mejora en las predicciones de la proporción cultivada de trigo usando el clustering robusto, es importante notar que en algunos partidos el modelo no robusto incluso ni siquiera logró identificar la presencia del Trigo para departamentos en los que evidentemente la proporción de este cultivo es considerable (con proporciones mayores al $15 \%$). 
+
+![Proporciones predichas y observadas del Trigo usando GMM y TCLUST](NubeDePuntos.jpeg){#fig-nubeprops2021 width=95%}
+
+Como datos de verdad de campo usamos los datos encontrados en: 
+
+https://datosestimaciones.magyp.gob.ar/reportes.php?reporte=Estimaciones
+
+Para la lectura y carga de los datos de verdad de campo, así como en el cálculo de las superficies territoriales por departamento y el área sembrada de Trigo se recurre a la libreria de Python GeoPandas que se usa ampliamente para el manejo de datos geográficos. El archivo descargado es de tipo *shapefile*. Esta base de datos contiene como columnas el año, la Provincia, el departamento y el cultivo. Para hacer el estudio y encontar los datos concisos fue necesario filtrar los datos para obtener sintetizada la información y poder comparar las proporciones estimadas con las de campo.
+
+El clustering No robusto (GMM) se lleva a cabo usando la librería de Scikit-Learn de Python, mientras que el Clustering robusto se lleva a cabo usando el software estadístico de acceso libre R-Studio, más precisamente haciendo uso del paquete *tclust*, no encontramos una implementación en Python del algoritmo TCLUST. Como dato en tiempo de ejecución cuando aplicamos el algoritmo TCLUST con los parámetros especificados al departamento San Justo de la provincia de Córdoba (cuya superficie es de $15559 Km^{2}$, más grande que un país como Montenegro cuya superficie es de un poco menos de $14000 Km^{2}$) el tiempo de ejecución fue de $107$ minutos, la precisión con TCLUST fue de: $0.00525$ lo que nos da un resultado por lo menos para este departamento bastante preciso, a modo de prueba y como interés particular se intentaron llevar a cabo los algoritmos K-TAU centers y RMBC, basados en el concepto de escalas Tau introducido por Victor Yohai y Ruben H. Zamar [@yohai1988high] e implementados en [@gonzalez2019metodos] para este mismo departamento y se presentaron inconvenientes en la memoria, las implementaciones actuales no están optimizadas en cuanto al uso de memoria y por lo tanto no es aplicable en su forma actual a nuestro dataset. El algoritmo K-TAU centers está implementado en R-Studio se usa la función *improvedktaucenters* de la librería *ktaucenters*. Así mismo el algoritmo RMBC está implementado también en R-studio se usa la función *RMBC* de la librería *RMBC*.
+
+::: {layout-ncol=2}
+
+![Centroides generados por GMM.](Clusters_gmm_2021.png){#fig-gmmCordoba}
+
+![Centroides generados por TCLUST.](Clusters_tclust_2021.png){#fig-tclustCordoba}
+:::
+
+No se detecta una clara presencia del Trigo usando GMM, pues no se observan picos mayores a $0.6$ del NDVI @fig-gmmCordoba en el departamento General San Martín de la Provincia de Córdoba el cual por datos de campo tiene una proporción de un poco mas del $20 \%$ en el año 2021, concluyendo que GMM no logró captar el trigo para este departamento, por el contrario, si se detecta una clara presencia del Trigo @fig-tclustCordoba (cluster $2$, color azul) usando el clustering robusto, también se manifiestan dos clusters (el $1$ y el $6$, colores rojo y magenta respectivamente) que parecen ser cultivos de verano pues parece que alcanzan picos de NDVI en los meses de diciembre, enero y febrero todo esto en el mismo departamento General San Martín de la Provincia de Córdoba para el año 2021, como vemos TCLUST ha logrado reconocer patrones más precisos, la proporción estimada es del $18.57 \%$ que si bien difiere al porcentage real en un $3 \%$ aproximadamente representa una evidente mejora en la fiabilidad de los resultados para la predicción de proporciones cultivadas para años futuros sin un respaldo de los datos de campo. El ruido presente en el modelo sesga claramente el resultado final y se debe recurrir necesariamente a múltiples tratamientos de robustez antes y durante el aprendizaje de clusterización. Calculamos el RMSE ponderado por superficie:
+
+$$
+RMSE = \sqrt{\sum_{i=1}^{220} w_i (\hat{P}_i - P_i)^{2}} \text{,}
+$$
+
+donde, $\hat{P}_i = \text{Proporción estimada}$ y $P_i = \text{Proporción Real}$. Los pesos $w_i$ están dados por:
+
+$$
+w_i = \frac{\text{Superficie del i-ésimo departamento}}{\text{Superficie total}}\text{.}
+$$
+
+Para un total de $220$ departamentos analizados se obtiene usando clustering No robusto un error cuadrático medio poderado por superficie de $0.072 \text{ rms}$ y para clustering robusto el error es de  $0.059 \text{ rms}$ mostrando una sustancial mejoría en el aprendizaje.
+
+## Posibles mejoras y próximos pasos
+
+Para los departamentos con la mayor cantidad de error cuadrático medio se puede hacer un estudio particular y observar que pudo haber ocasionado esta predicción sesgada, proponer alternativas para estos partidos patológicos y observar si existen similitudes tanto geográficas, climáticas o de otra índole entre estas regiones que puedan generar esta diferencia elevada entre la proporción estimada de trigo en esta tesis y la proporción real de trigo cultivada. Se puede llevar a cabo este estudio tomando una región de superficie mas acotada y hacer foco en una provincia (por ejemplo) hay que enfatizar que se analizan un aproximado total de $1.200.000$ kilómetros cuadrados de superficie. 
+
+Una alternativa posible para la cual no habríamos eliminado observaciones atípicas del indice NDVI en las series de tiempo, podría haber sido detectarlos usando el filtro Hampel y posteriormente haber usado Smoothing Splines dándole a estas observaciones un peso muy bajo así de esta forma el fiteo no lo tendrá muy en cuenta, usando de esta forma Smoothing Splines que es una alternativa temporalmente más eficiente y no desechando valores del NDVI.
+
+Las predicciones cultivadas realizadas para el trigo (cultivo de invierno) se pueden replicar para otros cultivos como lo pueden ser la soja (cultivo de verano) su relevancia radica dado que Argentina es el tercer productor mundial para datos tomados en el año 2022 [@lenz2022piensos] con un estimado total de $43.86$ millones de toneladas al año por detrás de Brasil y Estados Unidos, primero y segundo lugar respectivamente, también es importante remarcar que el complejo sojero argentino representó en 2021 el $30.6 \%$ de las exportaciones nacionales, por un monto de $23.841$ millones de dólares [@schmidt2022analisis] y [@colussi2023brasil]. Así mismo se puede replicar el mismo estudio para un cultivo central como el maíz y otros más como la cebada.
+
+

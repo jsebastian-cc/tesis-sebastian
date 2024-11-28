@@ -1,0 +1,1038 @@
+# Clustering
+```{python}
+#| echo: false
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+from scipy.spatial.distance import cdist
+from sklearn.datasets import make_blobs, make_moons
+from sklearn.cluster import KMeans
+from sklearn import cluster, datasets, mixture
+import random
+from scipy.stats import multivariate_normal
+from sklearn.mixture import GaussianMixture
+```
+
+```{r}
+#| echo: false
+#| warning: false
+library(ggplot2)
+library(mclust)
+library(tclust)
+library("mvtnorm")
+library(gridExtra)
+library(cluster)
+```
+
+## Definición
+
+Clustering es un algoritmo de Machine Learning cuya finalidad principal es lograr el agrupamiento de conjuntos de objetos no etiquetados (lo que lo hace un algoritmo no supervisado), para así construir subconjuntos de los datos conocidos como *clusters*. Cada cluster está formado por una colección de elementos que a términos de análisis resultan similares entre sí, pero que poseen características diferenciales con respecto a objetos de otros clusters. 
+
+Cabe diferenciar antes de hacer un desarrollo teórico formal, entre los problemas de clasificación y de clusterización. Ambos algoritmos moralmente presentan ciertas similitudes prácticas pero su diferencia esencial radica en que la clasificación se sirve de clases predefinidas, de las que ya a priori conocemos la respuesta, por el contrario la clusterización identifica similitudes entre objetos  que agrupa según esas características en común y que les diferencian de los otros grupos de objetos. Por esta razón enmarcamos el problema de clasificación como un algoritmo Supervisado, y la clusterización como un problema No Supervisado, hecha esta aclaración conceptual prosigamos con la exposición del clustering.
+
+En primer lugar se debe definir el número de agrupaciones que se desea hacer en el conjunto de datos, esto se puede llevar a cabo por el conocimiento previo del problema que deseamos abordar, si se dispone de una experiencia del comportamiento de los fenómenos podemos establecer una cantidad de agrupaciones apropiada. En caso contrario de no tener un entendimiento anticipado de la naturaleza del problema real podemos usar método del codo (que es una heurística muy usada) varios métodos matemáticos [@masud2018nice] para encontrar un número óptimo de clusters, algunos con más formalidad que otros pero siempre buscando el objetivo de establecer que cantidad de agrupaciones es la más apropiada. De ahora en más, supondremos que la cantidad de clusters es un parámetro fijo en los modelos de clustering que se presentarán en este trabajo, y no abordaremos el problema particular de encontrar el número óptimo de agrupaciones.
+
+Existen varios métodos de clustering como lo pueden ser: k-means, Gaussian Mixture Model, hierarchical clustering, spectral clustering, DBSCAN entre otros. Haremos enfoque en los dos primeros métodos y como están relacionados entre sí. Asi como expondremos métodos de clustering robustos más adelante. Los métodos difieren por como definimos los valores iniciales, que distribuciones subyacentes usamos, y que teoría matemática desplegamos para clusterizar. 
+
+## Métodos de Clusterización
+
+Estudiaremos y presentaremos dos métodos de clusterización muy importantes k-means y Gaussian Mixture Model (GMM), veremos la relación entre estos dos métodos y observaremos su comportamiento en datos simulados primero sin valores atípicos y con valores atípicos. 
+
+Comenzaremos con el método quizá más elemental de la teoría de clusterización. K-means es el método que menor desarrollo matemático exige, pero aún así se presenta como una buena introducción a la clusterización en general.
+
+### K-Means
+
+Tenemos un conjunto de elementos $\{x_1,x_2,....,x_N\}$, consistente de $N$ observaciones de una variable euclidiana aleatoria $D$-dimensional $x$. particionaremos los datos en $K$ clusters, donde supondremos por ahora que $K$ es un valor dado. Definamos un conjunto $D$-dimensional de vectores $\mu_{k}$ (centroides), donde: $k=1,...,K$, en los cuales $\mu_{k}$ será el representante asociado para el $k-$ ésimo cluster. Más adelante veremos que estos $\mu_{k}$ representan los centros de cada grupo, nuestro objetivo será asignar cada dato a una agrupación, así como también encontrar un conjunto de vectores $\{\mu_k\}$, tal que la suma de los cuadrados de las distancias de cada punto de datos a su vector más cercano $\mu_k$, sea un mínimo. 
+
+Para cada punto $x_n$ definimos variables $r_{nk} \in \{0,1\}$ de la siguiente manera:
+
+$$
+r_{nk} = \begin{cases} 1 & \text{si $x_{n}$ es asignado al cluster $k$} 
+                            \\
+                            0 & \text{en caso contrario.}
+              \end{cases}
+$${#eq-rnk}
+
+Definimos la función objetivo como:
+
+$$
+J= \sum_{n=1}^{N} \sum_{k=1}^{K} r_{nk} \| x_n-\mu_k \|^{2}\text{,}
+$${#eq-Jkmeans}
+
+que representa la suma de las distancias de todos los puntos a su representante asignado, asi que nuestra tarea consiste en encontrar los valores $r_{nk}$ y $\mu_k$ que minimicen $J$.
+
+Esto lo llevamos a cabo iterativamente con los siguientes pasos:
+
+1. *Inicializamos $\mu_k$*: Se inicializan los centroides aleatoriamente.
+
+2. *Minimizamos $J$ con respecto de $r_{nk}$ manteniendo $\mu_k$ fijo.*: Asignar las observaciones a los centroides más cercanos según la distancia $L_2$.
+
+3. *Minimizamos $J$ con respecto a $\mu_k$ manteniendo $r_{nk}$ fijo.*: Se calculan los centroides promediando los puntos asignados a cada cluster.
+
+4. *Repetimos los pasos 2 y 3*: Hasta alcanzar la convergencia o alcanzar un máximo número de iteraciones
+
+Minimizar con respecto de $r_{nk}$ (Paso 2) es simplemente asignar a cada $x_n$ el $\mu_k$ más cercano, con lo que podemos expresarlo de la siguiente manera:
+$$
+r_{nk} = \begin{cases} 1 & \text{si $k=argmin_{j} \| x_n - \mu_j \|^{2}$} 
+                            \\
+                            0 & \text{en caso contrario.}
+              \end{cases}
+$${#eq-rnklk}
+
+Ahora para optimizar con respecto de $\mu_k$ con las asignaciones fijas, derivamos $J$ respecto de los centroides e igualamos a cero, obteniendo: 
+$$
+2\sum_{n=1}^{N} r_{nk}(x_n-\mu_k)=0.
+$$
+
+Despejando $\mu_k$ (paso 3) tenemos: 
+$$
+\mu_k = \dfrac{\displaystyle \sum_{n=1}^{N} r_{nk}x_n}{\displaystyle \sum_{n=1}^{N} r_{nk}}\text{,}
+$${#eq-mukmeans}
+
+donde podemos interpretar el denominador como el número de puntos $x_n$ asignados al cluster $k$. Asi que $\mu_k$ no es nada menos que la media de todos los puntos $x_n$ asignados al cluster $k$.
+
+Estos dos pasos iterativos se repiten hasta que no existan reasignasiones nuevas o hasta el máximo número de iteraciones. La convergencia esta asegurada pues en cada fase se va reduciendo el valor de la función objetivo. Más adelante veremos en que caso este método puede darnos resultados no deseados. 
+
+```{python}
+from scipy.spatial.distance import cdist 
+def kmeans(data,K, no_of_iterations):
+    idx = np.random.choice(len(data), K, replace=False) 
+    centroids = data.iloc[idx]
+    distances = cdist(data, centroids ,'euclidean') 
+    points = np.array([np.argmin(i) for i in distances])
+    for _ in range(no_of_iterations): 
+        centroids = []
+        for idx in range(K):
+            temp_cent = data[points==idx].mean(axis=0) 
+            centroids.append(temp_cent)
+ 
+        centroids = np.vstack(centroids)
+        distances = cdist(data, centroids ,'euclidean')
+        points = np.array([np.argmin(i) for i in distances])
+         
+    return points 
+```
+
+```{python}
+#| echo: false
+#| label: fig-kmeanssimulados
+#| fig-cap: "K-means, usando el código proporcionado arriba."
+
+lst = [[4.25,13.5],[4.5,13.75],[4.25,14.3],[4,14],[9,2],
+       [1.15,1.75],[9,1.5],[1.25,2],[8.7,2],[1.35,2.5],[1.55,2.5],
+       [1.5,2.15],[1.5,1.5],[4.5,13.45],[8.75,1.45],[8.75,2.5],
+       [9,2.225],[1.15,2],[8.75,1.5],[4.25,14]]  
+data = pd.DataFrame(lst)  
+points = kmeans(data,3,400)
+colors = [['r', 'y', 'b'][c] for c in points]
+plt.figure(figsize=(4,3));
+plt.scatter(data.iloc[:,0],data.iloc[:,1],color=colors, edgecolor='k', alpha=0.5);
+```
+
+Vemos como en @fig-kmeanssimulados K-means agrupa razonablemente los datos en tres clusters, esto ha sido usando el código proporcionado arriba.
+
+#### Cuando K-means puede fallar?
+
+Veremos en que casos este algoritmo que parece ser bastante razonable puede darnos aglomeraciones incorrectas. Como se puede apreciar en el método K-means solo estamos estimando los centroides de cada aglomeración, es decir no se estima la matriz de covarianzas de cada cluster. Por lo que aglomeraciones con varianza muy distinta, agrupaciones *deformes* o datos irregulares puede darnos predicciones erróneas. Veremos usando datos simulados las situaciones mencionadas anteriormente. 
+
+```{python}
+#| echo: false
+X, y = make_blobs(n_samples = 800,
+                  cluster_std = [1.0, 2, 0.09], random_state=2)
+y_pred = KMeans(n_clusters = 3).fit_predict(X)
+```
+
+```{python}
+#| echo: false
+#| label: fig-kmeans_var_distinta
+#| fig-cap: "K-means con tres clusters para varianzas muy distintas. "
+colors = [['r', 'g', 'b'][c] for c in y_pred]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], 
+	color=colors, edgecolor='k', alpha=0.5);
+plt.title("K-means Varianza Distinta");
+plt.show();
+```
+
+Se ha logrado agrupar un cluster satisfactoriamente, pero la aglomeración de puntos demasiado concentrados no es identificada como cluster, pues el algoritmo no tiene en consideración estos comportamientos @fig-kmeans_var_distinta.
+
+```{python}
+#| echo: false
+X, y = make_blobs(n_samples = 800, random_state=156)
+transformation = [[0.61, -0.64],
+	                [-0.41, 0.85]]
+X = np.dot(X, transformation)
+y_pred = KMeans(n_clusters=3).fit_predict(X)
+```
+
+
+```{python}
+#| echo: false
+#| label: fig-kmeans_anisotropicos
+#| fig-cap: "K-means con tres clusters para datos anisotrópicos."
+colors = [['r', 'g', 'b'][c] for c in y_pred]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], 
+	color=colors, edgecolor='k', alpha=0.5);
+plt.title("K-means Datos Anisotrópicos");
+plt.show();
+```
+
+Vemos como K-means no logra distinguir la forma de los clusters y simplemente tiene a consideración la distancia entre los datos @fig-kmeans_anisotropicos. Existen patrones que el algoritmo no puede detectar y será necesario para un modelo más adecuado tener en cuenta la covarianza de las agrupaciones. Se observa en @fig-kmeans_irregulares como K-means no logra solucionar este problema de datos irregulares.
+
+```{python}    
+#| echo: false
+X, y = make_moons(n_samples=800, shuffle = True, 
+                  noise = 0.1)
+y_pred = KMeans(n_clusters=2).fit_predict(X)
+```
+
+```{python}
+#| echo: false
+#| label: fig-kmeans_irregulares
+#| fig-cap: "K-means no logra detectar patrones irregulares."
+colors = [['r', 'g', 'b'][c] for c in y_pred]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], 
+	color=colors, edgecolor='k', alpha=0.5);
+plt.title("K-means Datos Irregulares");
+plt.tight_layout();
+plt.show();
+```
+
+Presentaremos un modelo ampliamente usado para clusterizar que generaliza K-means, y soluciona varios problemas que tienen que ver con la *forma* de los clusters. 
+
+### Gaussian Mixture Model {#sec-gmm}
+
+Para introducir este modelo que de ahora en más llamaremos GMM es ideal introducir algunos conceptos y definiciones. Para lo cual seguiremos escencialmente el [@bishop2006pattern].
+
+- **Definición: (Variable Latente)**
+
+Una variable latente es una variable para la cual no hay realización de muestra para al menos algunas observaciones en una muestra dada [@bollen2002latent]. En nuestro marco de clusterización esta variable latente sería la asignación de conglomerados $z$. Esta variable de asignación no es observada en el modelo. Si por el contrario se observa $x$, que son los datos en sí.
+
+- **Definición: (Modelo de variable Latente)**
+
+Es un modelo de probabilidad para el cual ciertas variables son latentes. Por ejemplo El GMM es un modelo de variable latente, pues en este modelo la asignación de conglomerados $z$ es una variable que se observa.
+
+- **Definición (*Mixture Distribution*)**
+
+Una densidad $p(x)$ representa una *mixture distribution* o un mixture model, si podemos escribir su densidad como una combinación convexa de otras densidades. Esto es, 
+
+$$
+p(x) = \sum_{i=1}^{k} w_{i}p_i(x)\text{,}
+$$
+
+donde $w_i > 0$. $\sum_{i=1}^{k}w_i = 1$, y cada $p_i$ es una densidad de probabilidad.
+
+En nuestro GMM se supone como hipótesis fundamental que los datos $x$ tienen una Mixture distribution cuyas densidades son normales. Es decir:
+
+$$
+p(x) = \sum_{k=1}^{K} \pi_{k} \mathcal{N}(x|\mu_k, \mathbf{\Sigma_k}).
+$${#eq-pxgmm}
+
+La optimización de la función de verosimilitud se lleva a cabo por el algoritmo de Expectation-Maximization (EM). Daremos las siguientes definiciones que nos permitirán formalizar el problema. 
+
+Introduzcamos una variable aleatoria binaria $\mathbf{z}$ de $K$ dimensiones: $\mathbf{z} = (z_1,z_2,..,z_n)$, talque: $p(z_k = 1) = \pi_k$, 
+
+Donde los parámetros $\pi_k$ deben satisfacer: $0 \leq \pi_k \leq 1$, y además $\displaystyle \sum_{k=1}^{K} \pi_k= 1$
+
+$\pi_k$ representa la probabilidad de que una cierta observación pertenezca a una agrupación $k$-ésima. Dado que $z$ usa una representación vectorial, podemos escribir esta distribución de la siguiente manera:
+
+$$
+p(\mathbf{z})=\prod_{k=1}^{K}\pi_{k}^{z_k}\text{.}
+$$
+
+La distribución condicional de $x$ dado un $z$ es una distribución Gaussiana.
+
+$$
+p(\mathbf{x}|z_k=1)= \mathcal{N}(x|\mu_k,\mathbf{\Sigma_k})\text{,}
+$$ 
+
+con lo cual tenemos:
+
+$$
+p(\mathbf{x} \mid \mathbf{z})=\prod_{k=1}^{K} \mathcal{N}(\mathbf{x} \mid \mu_k,\mathbf{\Sigma_k})^{z_k}\text{.}
+$$
+
+Una cantidad que juega un papel fundamental es la probabilidad condicional de $z$ dado $x$. La cual podemos encontrar usando el Teorema de Bayes.
+
+$$
+\gamma(z_k) = p(z_k = 1|\mathbf{x}) = \dfrac{p(z_k = 1)p(\mathbf{x}|z_k = 1)}{\displaystyle \sum_{j=1}^{K}{p(z_j =1)p(\mathbf{x}|z_j =1)}}=\dfrac{\pi_k \mathcal{N}(x|\mathbf{\mu_k}, \mathbf{\Sigma_k})}{\displaystyle \sum_{j=1}^{K} {\pi_k \mathcal{N}(x|\mathbf{\mu_j}, \mathbf{\Sigma_j})}}
+$${#eq-gamma}
+
+El problema de aprendizaje lo podemos formular de la siguiente manera:
+
+Disponemos de un conjunto $x_1,x_2,....,x_n$ extraído de un GMM. nuestro objetivo será estimar los siguientes parámetros:
+
+- Probabilidades de los cluster: $\pi = (\pi_1,...,\pi_k)$
+
+- Centroides de los cluster: $\mathbf{\mu} = (\mu_1,...,\mu_k)$
+
+- Las matrices de covarianza de cada cluster: $\mathbf{\Sigma} = (\Sigma_1,...,\Sigma_k)$
+
+
+**Expectation Maximization para Mezclas Gaussianas**
+
+Un método elegante y poderoso para encontrar soluciones de máxima verosimilitud para modelos con variables latentes es el algoritmo de Expetation-Maximization, o algoritmo EM ampliamente usado en diferentes modelos. En particular, lo vamos a tratar para este caso de mezclas gaussianas. A partir de la @eq-pxgmm, el logaritmo de la función de verosimilitud esta dado por:
+
+$$
+Inp(\mathbf{X}|\mathbf{\pi},\mathbf{\mu},\mathbf{\Sigma})=\sum_{n=1}^{N} In \left \{\sum_{k=1}^{K} \pi_k \mathcal{N}(\mathbf{x_n}|\mathbf{\mu_k},\mathbf{\Sigma_k})\right \}
+$$ {#eq-log_verosimilitud}
+
+Establezcamos las condiciones que deben satisfacerse en el máximo de una función de verosimilitud. Obteniendo las derivadas de $In p(X|\pi,\mathbf{\mu},\mathbf{\Sigma})$ con respecto de las medias $\mathbf{\mu_k}$ e igualándolas a cero, obtenemos.
+
+$$
+0 = -\sum_{n=1}^{N} \frac{\pi_k \mathcal{N}(x_n|\mu_k, \Sigma_k)}{\sum_j \pi_j \mathcal{N}(\mathbf{x_n}|\mathbf{\mu_j}, \mathbf{\Sigma_j})}\mathbf{\Sigma_k} (\mathbf{x_n}-\mathbf{\mu_k})\text{,}
+$$
+
+es decir usando que: 
+
+$$
+\gamma(z_{nk})= \frac{\pi_k N(\mathbf{x_n}|\mathbf{\mu_k}, \mathbf{\Sigma_k})}{\sum \pi_j N(\mathbf{x_n}|\mathbf{\mu_j},\mathbf{\Sigma_j})}\text{,}
+$$
+
+obtenemos: 
+
+$$
+\mu_k= \frac{1}{N_k} \sum_{n=1}^{N} \gamma(z_{nk})x_n \text{,}
+$${#eq-mukgmm}
+
+donde hemos definido: $N_k= \sum_{n=1}^{N} \gamma(z_{nk})$. Podemos interpretar $N_k$ como la cantidad de observaciones asignadas al cluster $k$.
+
+Asi mismo si derivamos $In(X|\pi,\mu,\Sigma)$ con respecto de $\Sigma_k$ y lo igualamos a cero obtenemos:
+
+$$
+\Sigma_k = \frac{1}{N_k}\sum_{n=1}^{N} \gamma(z_{nk})(\mathbf{x_n}-\mathbf{\mu_k})(\mathbf{x_n}-\mathbf{\mu_k})^T \text{.}
+$$
+
+Finalmente, maximizamos la función definida en @eq-log_verosimilitud con respecto de $\pi_k$, teniendo en cuenta la restricción de que $\sum \pi_k =1$. Esto lo llevamos a cabo usando multiplicadores de Lagrange y maximizando la siguiente cantidad: 
+
+$$
+Inp(\mathbf{X}|\mathbf{\pi},\mathbf{\mu},\mathbf{\Sigma})+\lambda \left( \sum_{k=1}^{K} \pi_k - 1 \right)
+$$ 
+
+Llegando a: 
+
+$$
+0=\sum_{n=1}^{N} \frac{\mathcal{N}(\mathbf{x_n}|\mathbf{\mu_k},\mathbf{\Sigma_k})}{\sum_{j} \pi_j \mathcal{N}(\mathbf{x_n}|\mathbf{\mu_j},\mathbf{\Sigma_j})}+\lambda
+$$
+
+Donde una vez mas aparecen las responsabilidades, multiplicando ambos lados de la ecuación por $\pi_k$ y sumando sobre $k$ haciendo uso de la restricción $\sum \pi_k =1$. Obtenemos $\lambda = -N$. Por lo cual obtenemos: 
+$$
+\pi_k = \frac{N_k}{N}
+$${#eq-pikgmm} 
+
+Presentemos resumidamente el algoritmo de EM para mezclas Gaussianas, donde se pueden ver más detalladamente los pasos E y M, *expectation* y *maximization* respectivamente. Dada una Mezcla de distribución Gaussiana, el objetivo es maximizar la función de Verosimilitud con respecto de los parámetros $\mathbf{\mu_k}$, $\mathbf{\Sigma_k}$, $\pi_k$.
+
+1. Inicializar las medias $\mathbf{\mu_k}$, covarianzas $\mathbf{\Sigma_k}$ y los coeficientes $\pi_k$ y evaluar el valor inicial del logaritmo de la función de verosimilitud.
+
+2. Paso E: Evaluar las responsabilidades usando los parámetros actuales.
+
+$$
+\gamma(z_{nk})=\dfrac{\pi_k \mathcal{N}(\mathbf{x_n}|\mathbf{\mu_k}, \mathbf{\Sigma_k})}{\sum_j \pi_j \mathcal{N}(\mathbf{x_n}|\mathbf{\mu_j},\mathbf{\Sigma_j})}
+$$
+
+3. Paso M: Re-estimar los parámetros usando las actuales responsabilidades.
+
+\begin{gather*}
+\mathbf{\mu_k}^{nuevo} = \frac{1}{N_k}\sum_{n=1}^{N} \gamma(z_{nk})\mathbf{x_n} \\
+\mathbf{\Sigma_k}^{nuevo} = \frac{1}{N_k}\sum_{n=1}^{N} \gamma(z_{nk})(\mathbf{x_n}-\mathbf{\mu_k})(\mathbf{x_n}-\mathbf{\mu_k})^T \\
+\pi_k^{nuevo} = \frac{N_k}{N}
+\end{gather*}
+
+donde $N_k = \sum_{n=1}^{N} \gamma(z_{nk})$
+
+4. Evaluar el logaritmo de la función de verosimilitud definida en @eq-log_verosimilitud y chequear para la convergencia de los parámetros. Si la convergencia no se satisface, regresar al paso 2.
+
+A modo explicativo veremos como se comportan los pasos *E - expectation* y *M - maximization* en la estimación de distribuciones gaussianas para datos simulados en una la recta real. 
+
+Simularemos datos de tres grupos de distribuciones normales con los siguientes parámetros, con $n=600$ observaciones para cada agrupación y los parámetros poblacionales $\mu$ y $\sigma$ dados por: 
+
+\begin{equation}
+\mathbf{\mu}=(-10.5,10.5,0)  \quad\text{y}\quad \mathbf{\sigma}=(2.5,1.8,3.6)
+\end{equation}
+
+```{python}
+n ,mu, sigma = 600, [-10.5, 10.5, 0], [2.5, 1.8, 3.6]
+x1 = np.random.normal(mu[0], np.sqrt(sigma[0]), n)
+x2 = np.random.normal(mu[1], np.sqrt(sigma[1]), n)
+x3 = np.random.normal(mu[2], np.sqrt(sigma[2]), n)
+X = np.array(list(x1) + list(x2) + list(x3))
+np.random.shuffle(X)
+
+def pdf(data, mean: float, variance: float):
+    s1 = 1/(np.sqrt(2*np.pi*variance))
+    s2 = np.exp(-(np.square(data - mean)/(2*variance)))
+    return s1 * s2
+```
+
+
+
+```{python}
+#| echo: false
+#| fig-cap: "Distribución real de los datos simulados en una dimensión."
+bins = np.linspace(np.min(X),np.max(X), 100)
+plt.figure(figsize=(5,4));
+plt.xlabel("$x$");
+plt.ylabel("pdf");
+plt.scatter(X, [0.005] * len(X), color='navy', s=30, marker=2, label="Datos");
+plt.plot(bins, pdf(bins, mu[0], sigma[0]), color='red', label="Distribución Real");
+plt.plot(bins, pdf(bins, mu[1], sigma[1]), color='red');
+plt.plot(bins, pdf(bins, mu[2], sigma[2]), color='red');
+plt.legend();
+plt.plot();
+```
+
+```{python}
+#| echo: false
+k = 3
+means = []
+weights = np.ones((k)) / k
+for _ in range(3):
+    numero_aleatorio = random.uniform(-8, 8)
+    means.append(numero_aleatorio)
+
+variances = []
+for _ in range(3):
+    numero_aleatorio = random.uniform(0.8, 3.0)
+    variances.append(numero_aleatorio)
+```
+
+Inicializamos los parámetros a aprender del modelo, medias, varianzas, y proporciones e iteraremos en 6 pasos, mostratremos a modo ilustrativo como las distribuciones gaussianas van realmente aproximándose a las distribuciones originales @fig-convergenciagmm.
+
+```{python}
+#| echo: false
+#| warning: false
+eps=1e-8
+k = 3
+for step in range(31):
+    likelihood = []
+    for j in range(k):
+        likelihood.append(pdf(X, means[j], np.sqrt(variances[j])))
+    likelihood = np.array(likelihood)
+    b = []
+    for j in range(k):
+        b.append((likelihood[j]*weights[j])/(np.sum([likelihood[i]*weights[i] for i in range(k)], axis=0)+eps))
+        means[j] = np.sum(b[j] * X) / (np.sum(b[j]+eps))
+        variances[j] = np.sum(b[j]*np.square(X - means[j]))/(np.sum(b[j]+eps))
+        weights[j] = np.mean(b[j])
+```
+
+
+::: { layout-ncol=2}
+![Comenzamos con las distribuciones iniciales aleatorias](img_00.png){#fig-convergenciagmm}
+
+![](img_01.png){width=25%}
+
+![](img_02.png){width=25%}
+
+![](img_03.png){width=25%}
+
+![](img_04.png){width=25%}
+
+![Se logra una un error aceptable.](img_05.png){width=25%}
+:::
+
+En cuanto a la convergencia del modelo GMM, el modelo no necesariamente converge. A pesar de esto, se demuestra formalmente en [@zhao2020statistical] un estudio para la convergencia del algoritmo EM aplicado en GMM con un número arbitrario de componentes y distintos pesos. Se muestra que ha medida que los centroides de los componentes estén separados por lo menos por una cierta constante que depende de la cantidad de aglomeraciones y de la dimensión del espacio, el algoritmo EM converge localmente al óptimo global del logaritmo de la verosimilitud. También se muestra que la razón de convergencia es lineal. 
+
+Ahora veremos como GMM soluciona algunos de los problemas que tiene K-means, esto explicándose porque GMM pretende estimar la matriz de covarianzas de cada agrupación dando asi una noción de *forma* de cada cluster, recreamos el clustering usando GMM para las figuras @fig-kmeans_var_distinta, @fig-kmeans_irregulares, @fig-kmeans_anisotropicos. 
+
+```{python}
+#| echo: false
+#| label: fig-gmmvardistinta
+#| fig-cap: "GMM para varianzas distintas."
+X, y = make_blobs(n_samples=800,
+                  cluster_std=[1.0, 2, 0.09],
+                  random_state=2)
+gmm = GaussianMixture(n_components=3, random_state=8).fit(X)
+labels = gmm.predict(X)
+colors = [['r', 'g', 'b'][c] for c in labels]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], c=colors, cmap='viridis', marker='o', edgecolors='k', alpha=0.7);
+plt.title('GMM con Varianza Distinta');
+plt.show();
+```
+
+GMM logra identificar correctamente los 3 clusters, solucionando el problema de varianzas distintas, al estimar la matriz de covarianzas para cada agrupación detecta la particularidad de cada agrupación @fig-gmmvardistinta. Se reconocen agrupaciones muy *condensadas* y agrupaciones *dispersas*, más allá de que comparten un espacio, o en este caso incluso un cluster esta *adentro* de otro. Para datos anisotrópicos, GMM reconoce la forma de los $3$ clusters, detectando la naturaleza de los datos @fig-gmmanisotropicos y agrupándolos adecuadamente. Aún así GMM tampoco logra solucionar esta clase de datos irregulares @fig-gmmirregulares. Existen en la literatura algoritmos ampliamente conocidos que resuelven esta problemática bastente bien pero no son analizados en esta tesis, quizá el más renombrado es DBSCAN por sus siglas en inglés  (Density-Based Spatial Clustering of Applications with Noise)
+[@schubert2017dbscan], este algoritmo tiene una complejidad temporal de $O(nlog(n))$ mientras que GMM tiene una complejidad de $O(nkd^{3})$, donde $k$ es la cantidad de aglomeraciones y $d$ es la dimensión del espacio. Además de ser de mayor complejidad existe una gran cantidad de parámetros que el algoritmo DBSCAN necesita y la estimación de estos parámetros puede ser compleja si se debe aplicar para múltiples datasets (como es nuestro caso), la alternativa de ir retocando manualmente parámetros, o tratar de estimarlos como un problema aparte para luego usar DBSCAN, no lo consideramos una posibilidad viable. 
+
+```{python}
+#| echo: false
+#| label: fig-gmmanisotropicos
+#| fig-cap: "GMM para datos anisotrópicos."
+X, y = make_blobs(n_samples=800, random_state=156)
+transformation = [[0.61, -0.64],
+	                [-0.41, 0.85]]
+X = np.dot(X, transformation)
+gmm = GaussianMixture(n_components=3, random_state=8).fit(X)
+labels = gmm.predict(X)
+colors = [['r', 'g', 'b'][c] for c in labels]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], 
+	color=colors, edgecolor='k', alpha=0.5);
+plt.title("GMM Datos Anisotrópicos");
+plt.show();
+```
+
+```{python}
+#| echo: false
+#| label: fig-gmmirregulares
+#| fig-cap: "GMM Datos Irregulares"
+X, y = make_moons(n_samples=800, shuffle=True, 
+	noise=0.1, random_state=120)
+gmm = GaussianMixture(n_components=2, random_state=8).fit(X)
+labels = gmm.predict(X)
+colors = [['r', 'g', 'b'][c] for c in labels]
+plt.figure(figsize=(4,3));
+plt.scatter(X[:, 0], X[:, 1], 
+	color=colors, edgecolor='k', alpha=0.5);
+plt.title("GMM Datos Irregulares");
+plt.show();
+```
+
+**Relación entre K-means y GMM**
+
+K-means se puede pensar como una particularidad de GMM pues es aplicar GMM considerando que cada grupo es una esfera uniforme, mientras que en GMM cada grupo puede tener formas esféricas arbitrarias siempre que sean esferas de distribuciones normales.
+
+Matemáticamente no es complicado probar que si consideramos un modelo de mezclas Gaussinas en el que las matrices de covarianza de los componentes están dadas por $aI$ (pues se consideran formas esféricas) y donde $a$ es un parámetro compartido por todos los grupos e $I$ es la matriz identidad, entonces obtenemos:
+
+$$
+p(x|\mu_k, \Sigma_k) = \frac{1}{(2 \pi a)^{1/2}} \exp \left\{-\frac{1}{2a} \|x- \mu_k \|^{2} \right\}
+$$
+
+Ahora aplicamos el método EM para maximizar la verosimilitud en una mezcla de $K$ distribuciones normales con $a$ parámetro fijo (no debe ser re-estimado por el modelo). Usando la @eq-gamma obtenemos:
+
+$$
+\gamma(z_{nk}) = \dfrac{\pi_k \exp \{-\|x_n - \mu_k \|^{2}/2a\}}{\sum_j {\pi_j \exp \{-\|x_n - \mu_j \|^{2}/2a\}}}
+$$
+
+Si consideramos el limite $a \rightarrow 0$ podemos observar que en el denominador el término para el cual $\|x_n - \mu_j \|^{2}$ es el más pequeño va a tender a cero más lentamente y de esta manera las responsabilidades $\gamma(z_{nk})$ para la observación $x_n$ tenderán todos a cero excepto para el término j-ésimo, en el cual $\gamma(z_{nk}) \rightarrow 1$. Observemos que esto se cumple independientemente de los valores de $\pi_k$ siempre que ninguno de los $\pi_k$ sea cero. Por lo tanto, en este límite, obtenemos una asignación estricta de puntos de datos a grupos, tal como en el algoritmo K-means, de modo que $\gamma(z_{nk}) \rightarrow r_{nk}$, donde $r_{nk}$ está definido en la @eq-rnk. Cada punto por lo tanto es asignado al cluster cuyo centroide se encuentra más proximo.
+
+De esta manera en el paso M al re-estimar el parámetro $\mu_k$ dado por @eq-mukgmm se obtiene @eq-mukmeans. Tenga en cuenta que la fórmula de re-estimación de los coeficientes de mezcla @eq-pikgmm simplemente restablece el valor de $\pi_k$ para que sea igual a la fracción de puntos de datos asignados al grupo $k$, aunque estos parámetros ya no juegan un papel activo en el algoritmo.  
+
+Finalmente tomando el límite $a \rightarrow 0$ el logaritmo de la verosimilitud esta dado por:
+
+$$
+ln p(X|\mu,\Sigma,\pi) \rightarrow -\frac{1}{2} \sum_{n=1}^{N} \sum_{k=1}^{K} r_{nk} \| x_n - \mu_k \|^{2} + const
+$$
+
+Que como observamos es el equivalente al problema de miniminización en K-means, pues para maximizar el logaritmo de la verosimilitud se debe minimizar la función $J$ @eq-Jkmeans.
+
+Ahora veremos como los algoritmos presentados no arrojan resultados deseados para conjuntos de datos con ruido y valores atípicos. Presentaremos algoritmos que pretenden solucionar estos problemas.
+
+```{r}
+#| echo: false
+set.seed(123)
+x1_normal <- rnorm(20, mean = 0, sd = 0.35)
+y1_normal <- rnorm(20, mean = -0.5, sd = 0.5)
+x2_normal <- rnorm(20, mean = 7.5, sd = 0.5)
+y2_normal <- rnorm(20, mean = -0.1, sd = 1.5)
+x3_normal <- rnorm(20, mean = 0, sd = 1)
+y3_normal <- rnorm(20, mean = 6, sd = 1)
+outliers <- data.frame(x = c(11.5), y = c(16.5))
+data <- rbind(data.frame(x = c(x1_normal,x2_normal,x3_normal), 
+                         y = c(y1_normal,y2_normal,y3_normal)), outliers)
+```
+
+
+## Clustering Robusto
+
+Hasta ahora hemos hecho clustering para datos que no presentan ruido. Ahora veremos como podríamos abordar el problema en el caso de que los datos estén contaminados. Existen en la literatura múltiples enfoques de como podría solucionarse este problema, estos pueden enmarcarse varias categorías principales:
+
+1. *Enfoque paramétrico*: Se usan distribuciones con colas más pesadas, como lo puede ser por ejemplo la distribución t-student multivariada [@peel2000robust]. Partiendo de este enfoque existen múltiples mejoras en la literatura, en la que se puede agregar un componente asociado con una distribución paramétrica (posiblemente inadecuada), para capturar valores atípicos [@banfield1993model] [@coretto2016robust] [@farcomeni2020robust]. Este enfoque no será tratado en esta tesis y puede ser tratado como alternativa en un trabajo futuro.
+
+2. *Enfoque de Poda o Trimming*: Consiste en podar un cierto porcentaje de datos que se encuentran *alejados*, de tal forma que estos posibles valores atípicos pueden llegar a tener un peso despreciable en las estimaciones [@garcia2008general], [@garcia2010review]. Este será el enfoque que se usará en este trabajo para robustecer.
+
+3. *Enfoque de Minimización de la Escala Tau*: Desarrollado en [@gonzalez2019metodos]. Se proponen alternativas robustas: K-TAU, RMBC, basadas en minimizar una escala robusta de tipo tau de las distancias entre los puntos y los centros de los
+grupos a los que pertenecen. La escala Tau definida por Victor Yohai y Ruben H. Zamar [@yohai1988high], cumple con ser una escala robusta y eficiente cuando los datos son normales. La idea de alcance general de procedimientos robustos vía la minimización de la escala tau ya fue aplicada a diversos problemas de la estadística, por ejemplo Yohai y Zamar [@yohai1988high] la utilizaron en modelos de regresión. Esta alternativa (K-TAU y RMBC) la intentamos llevar a cabo en nuestro trabajo para un departamento particular de la provincia de Córdoba, en el que como se comenta en el capítulo $4$ existieron problemas en el uso de memoria, la implementación del paquete de R no optimiza el uso de memoria para el volumen de datos que estamos utilizando.
+
+Se presentarán a continuación distintos casos de datos simulados en los que existen problemas de valores atípicos y veremos como se comportan los modelos vistos hasta el momento. Más adelante observaremos una heurística que puede solucionar parcialmente el problema y veremos dos métodos de intento de robustificación de Clustering, uno basado en estimadores de Mediana y otro basado en Podas o *Trimming*. 
+
+Primero simulamos una instancia en la que solo se observa un outlier presente y observemos como los algortimos presentados se comportan. Observaremos nuestro primer ejemplo que son los datos de la @fig-kmeansrobusto-1 en el que se ven 3 agrupaciones bien definidas y una observación que parece ser un outlier. Llevamos a cabo K-means con $K=3$, $K=4$ y GMM con $K=3$ y $K=4$ vemos que en el caso de K-means con ambos valores de $K$ el algoritmo no identifica la naturaleza de los datos, pues se agruparon $2$ clusters en una sola agrupación dándonos a entender que ni siquiera en este caso $K$-means puede ser una posibilidad ni aún considerando un cluster más y esperando que el outlier se deposite en una agrupación. Por el contrario en GMM con los $K=3$, $K=4$ se obtienen mejores resultados pues se identifican adecuadamente los tres clusters, en el caso de $K=3$ se tomo el outlier como parte de la agrupación $2$, y por último para este ejemplo considerando $4$ clusters se tomo el outlier como el único elemento del cluster $4$, dando un resultado quizá más favorable.
+
+Mostramos como se implementa K-means con $K=3$, en el software estadístico R-Studio.
+```{r}
+kmeans_3 <- kmeans(data, centers = 3)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+centroid_colors_3 <- c("red", "blue", "black")
+df3 <- data.frame(x = data[, 1], y = data[, 2], cluster = factor(kmeans_3$cluster))
+```
+
+
+```{r}
+#| echo: false
+#| label: fig-kmeansrobusto
+#| fig-subcap:
+#|   - "K-means, $K = 3$, con un outlier."
+#|   - "K-means, $K = 4$, con un outlier."
+#| layout-ncol: 2
+centroid_colors_4 <- c("red", "blue", "black","yellow")
+kmeans_4 <- kmeans(data, centers = 4)
+df4 <- data.frame(x = data[, 1], y = data[, 2], cluster = factor(kmeans_4$cluster))
+p1 <-ggplot(df3, aes(x = x, y = y, color = cluster)) +
+     geom_point(pch = 19) + scale_color_discrete(name = "Cluster") +
+     labs(title = "K-Means un outlier K = 3") +
+     theme_minimal()
+p2 <-ggplot(df4, aes(x = x, y = y, color = cluster)) +
+     geom_point(pch = 19) + scale_color_discrete(name = "Cluster") +
+     labs(title = "K-Means un outlier K = 4") +
+     theme_minimal()
+p1
+p2
+```
+
+En ambos casos K-means no reconoce el patrón presente, GMM solucionó razonablemente el incoveniente del valor atípico usando la heurística de considerar un cluster más y de esta manera el outlier se aparte en un cluster.  
+
+Mostramos como se implementa GMM con $K=3$, en el software estadístico R-Studio.
+
+```{r}
+#| warning: false
+gmm_model_3 <- Mclust(data, G = 3)  
+```
+
+```{r, out.width="70%"}
+#| echo: false
+#| warning: false
+#| fig-cap: "GMM clustering no logra solucionar el problema de valores atípicos"
+gmm_clusters_3 <- predict(gmm_model_3)
+gmm_means_3 <- t(gmm_model_3$parameters$mean)
+cluster_3 = factor(gmm_clusters_3$classification)
+```
+
+```{r}
+#| echo: false
+#| label: fig-gmm3
+p1 <- ggplot(data, aes(x = x, y = y, color = cluster_3)) +
+  geom_point(pch = 19) + labs(title = "GMM un outlier K = 3") + scale_color_discrete(name = "Cluster") + theme_minimal()
+centroid_colors = c("red", "blue", "black","yellow")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+gmm_model <- Mclust(data, G = 4)  
+gmm_clusters <- predict(gmm_model)
+gmm_means <- t(gmm_model$parameters$mean)
+cluster = factor(gmm_clusters$classification)
+```
+
+```{r}
+#| echo: false 
+#| label: fig-gmml
+#| fig-subcap:
+#|   - "GMM $K = 3$, con un outlier."
+#|   - "GMM $K = 4$, con un outlier."
+#| layout-ncol: 2
+p2 <- ggplot(data, aes(x = x, y = y, color = cluster)) +
+  geom_point(pch = 19) + labs(title = "GMM un outlier K = 4") + scale_color_discrete(name = "Cluster") + theme_minimal()
+p1
+p2
+```
+
+En la @fig-gmml-1 se detectan los clusters adecuadamente, considerando el valor atípico parte de una agrupación. En la @fig-gmml-2 se detectan correctamente las tres agrupaciones y se considera el outlier una agrupación por si misma, lo cual es una mejora a K-means. Agregando un cluster más como se observa en la @fig-gmml-2 se obtiene el outlier apartado en un solo cluster, lo cual es ideal.
+
+Vemos como al inconveniente del rudio agregarle un cluster más y esperar que la agrupación adicional aparte en sí estos datos espurios puede ser considerada como una posibilidad. Quizá en algunos escenarios no sea lo más adecuado y sea necesario buscar otra estrategia, en un marco de datos más abstractos como observaciones definidas en dimensiones mayores a $3$ o en escenarios en los que el ruido pueda no ser representado como un sólo dato si no como una nube de puntos problemáticos, esta heurística puede fallar. Evidentemente se presentarán algunos contextos en los que esta heurística será fallida cuando se clusterize usando GMM. Como habíamos observado en la sección @sec-gmm, GMM es una generalización de K-means por lo que evidentemente GMM arroje mejores resultados que K-means.
+
+### Clustering Robusto basado en la Mediana (PAM)
+
+Resulta natural como intento para hacer clustering robusto usar estimadores basados en la mediana por lo visto en @fig-medianas. Dado que el método k-means se define a través de un criterio de mínimos cuadrados (Norma $L_2$), del cual hereda la falta de robustez, nos podríamos sentir tentados a tratar de robustecerlo utilizando los mismos argumentos que llevan a obtener la mediana de la muestra como una alternativa robusta, por lo visto en K-means se minimiza sobre $m$ la expresión $\sum (x_i - m)^{2}$ (Norma $L_2$), mientras que utilizando la mediana se minimiza la expresión $\sum | x_i - m |$ (Norma $L_1$), por lo que se apoda en la literatura como K-medioides o k-medianas. Llegando al siguiente problema de minimización:
+
+$$
+\underset{m_1, \dots m_k}{\arg \min} \sum_{i=1}^{n} \underset{j=1, \dots k}{\min} \|x_i -  m_j \|
+$$
+
+El enfoque $L_1$ dio origen al método Partitioning Around Medoids (PAM), que fue uno de los primeros intentos de realizar un análisis de conglomerados robusto. Otro enfoque $L_1$ también fue considerado en [@estivill2000fast], en el que igualmente se proponen medianas como estimadores de los centros. Desafortunadamente, el método PAM solo proporciona una robustez bastante tímida, se han intentado agregar a este método una cierta función de penalización pero se ha probado en la literatura que no se gana mucha robustez [@garcia1999robustness]. El algoritmo PAM esta disponible en la libería *cluster* del software estadístico R-Studio.  
+
+Existen versiones de clustering robusto también basado en medianas que esta vez se piensa como una réplica de GMM adaptando EM [@godichon2024robust], más específicamente el paso M pero reemplazando las estimaciones de la media y la varianza por versiones robustas basadas en la mediana y la matriz de covariación de la mediana. Todos los métodos propuestos están disponibles en el paquete R RGMM accesible en CRAN. El algoritmo es bastante reciente, publicado en el año 2024 por lo que no lo probamos a fecha de escritura de esta tesis pero se puede analizar como trabajo futuro. Este enfoque tiene algunas similitudes con el propuesto en [@gonzalez2019metodos] pues en el trabajo citado de Juan D. Gonzáles, se modifica el algoritmo EM de modo que la estimación de parámetros sea robusta y consistente.
+
+A continuación mostramos el resultado aplicando el clustering robusto TCLUST que formalizaremos y expondremos más adelante, se consideran para el aprendizaje $K=3$, el modelo considera el cluster $0$ como los valores *raros* y aparta estos datos como se observa en @fig-tclust1. Se usa la función *tclust* del software estadístico R, los parámetros de esta función serán explicados más adelante.
+
+```{r, out.width="80%"} 
+#| echo: false 
+centroid_colors <- c("red", "blue", "black")
+```
+
+```{r} 
+#| warning: false
+trim_clust <- tclust(data, k = 3, alpha = 0.01)  
+```
+
+```{r} 
+#| warning: false
+#| echo: false
+data <- as.data.frame(data)
+cluster = factor(trim_clust$cluster)
+```
+
+```{r, out.width="70%"} 
+#| echo: false 
+#| label: fig-tclust1
+#| fig-cap: 'Clusters generados por TCLUST K = 3'
+p5 <- ggplot(data, aes(x = data[,1],y = data[,2], color = cluster)) +
+  geom_point(pch = 19) +
+  labs(title = "TCLUST K = 3") + xlab("X") + ylab("Y") + scale_color_discrete(name = "Cluster") + theme_minimal()
+p5
+```
+
+Una vez echa una comparación sencilla con datos simulados de PAM y de TCLUST, formalizaremos el método de clustering robusto basado en Trimming y además experimentaremos con varios escenarios para analizar la capacidad de los modelos de clustering no robusto, la heurística presentada en @fig-tclust1 y el clustering robusto de aprender la naturaleza de los datos y lidiar con valores atípicos.
+
+### Método Robusto basados en Poda (Trimming) {#sec-trimming}
+
+Para la formalización matemática del problema consideraremos un conjunto de datos $x_1,.., x_n$ en $\mathbb{R}^{p}$. La densidad de la distribución $p$-variada con esperanza $\mu$ y matriz de covarianzas $\Sigma$, y $k$ entero que denota la cantidad de grupos.
+
+Bajo el modelo con valores atípicos, la función de varosimilitud está dada por:
+
+$$
+\prod_{j=1}^{k} \prod_{i\in R_j} \pi_j f(x_i;\mu_j, \Sigma) \prod_{i \notin R}g_i(x_i) 
+$${#eq-kkk}
+
+Con: 
+
+$$
+R = \bigcup_{j=1}^{k} R_j \quad\text{y}\quad \# R=n-[n\alpha]
+$${#eq-condiciones}
+
+Adicionalmente para las restricciones de las matrices de covarianzas $\Sigma_j 's$ definimos una constante $c$, mayor o igual a $1$ tal que:
+
+$$
+\frac{M_n}{m_n} \leq c
+$${#eq-rect1}
+
+Donde:
+
+$$
+M_n = \max_{j=1,\dots k} \max_{l=1,\dots p} \lambda_l(\Sigma_j) \quad\text{y}\quad m_n = \min_{j=1,\dots k} \min_{l=1,\dots p} \lambda_l(\Sigma_j) 
+$${#eq-rect2}
+
+
+Siendo $\lambda_l(\Sigma_j)$ los autovalores de las matrices $\Sigma_j$, $l=1,...,p$ y $j=1,...,k$. Notemos que $c=1$ produce la restricción mas fuerte posible, es decir las agrupaciones deben tener la misma forma.
+
+Un mejor entendimiento de nuestro problema es obtenido introduciendo las funciones de asignación $z_j$, $j=0,1...,k$. Para toda observación $x$ en $\mathbb{R}^{p}$, definimos $z_j(x) = 1$ si $x$ es asignado a la clase $R_j$, $j=1,...,k$, o $z_0(x)=1$ si el dato es recortado, a través de estas funciones. Por lo probado en [@gallegos2005robust] podemos evitar la contribución de las $g_i$ (contribución espuria) cuando las $g_i$'s satisfacen la siguiente condición:
+
+$$
+\arg \displaystyle\max_{\mathcal{R}} \max_{\mu_j, \Sigma_j} \prod_{j=1}^{k} \prod_{i \in R_j} \pi_j f(x_i; \mu_j, \Sigma_j) \subseteq \arg \max_{\mathcal{R}} \prod_{i \notin \cup_{j=1}^{k} R_j} g_i(x_i) 
+$${#eq-condicion}
+
+Donde $\mathcal{R}$ es el conjunto de todas las posibles particiones en el conjunto de índices $\{1, \dots ,n \}$ en $k$ grupos de observaciones regulares. Nótese que el lado derecho en la condición @eq-condicion sólo involucra las observaciones no regulares y no depende de la partición de las regulares. Por lo tanto, simplemente significa que cualquier conjunto de observaciones no regulares en cada partición óptima que maximice @eq-kkk también podría obtenerse como un subconjunto de $[n\alpha]$ elementos de la muestra que maximiza la probabilidad correspondiente al ruido. Esta condición se cumple fácilmente bajo supuestos razonables para las $g_i$ siempre que las observaciones no regulares puedan verse como meramente *ruido*. 
+
+Suponiendo que $g_i$'s satisfacen @eq-condicion y por ende se pueden omitir, podemos plantear nuevamente el problema de maximización en @eq-log_verosimilitud.
+
+$$
+\prod_{i=1}^{n}\prod_{j=1}^{k} \pi_{j}^{z_j(x_i)}f(x_i;\mu_j,\Sigma_j)^{z_j(x_i)}
+$$
+
+Donde $z_j$ son funciones binarias tales que $\displaystyle \sum_{j=0}^{k}z_j(x_i)=1$ y $\displaystyle \sum_{i=1}^{n}z_0(x_i)=[n\alpha]$. Tomando logaritmos llegamos a la siguiente formulación de maximización bajo las restricciones dadas en @eq-rect1 y @eq-rect2:
+
+$$
+\mathbb{E}\left( \sum_{j=1}^{k}z_j(.)(Ln \pi_j + Lnf(.;\mu_j,\Sigma_j))\right)
+$$
+
+En términos de las funciones de asignación:
+
+$z_j: \mathbb{R}^{p} \rightarrow \{0,1\}$ tal que $\displaystyle \sum_{j=0}^{k}z_j=1$ y $E z_0(.)=\alpha$ 
+
+Y los parámetros $\theta=(\pi_1,...,\pi_k,\mu_1,...,\mu_k,\Sigma_1,...,\Sigma_k)$ con los pesos $\pi_j \in [0,1]$, con $\displaystyle \sum_{j=1}^{k}\pi_j=1$, $\mu_j \in \mathbb{R}^{p}$ y matrices definidas positiva y simétricas $\Sigma_j$, $j=1,...,k$. 
+
+Ahora pasaremos a simplificar notablemente nuestro problema por medio de una adecuada reformulación que nos lleva a expresar las funciones de asignación $z_{j}'s$ sólo en términos de $\theta$. Dado $\theta \in \Theta$ , consideramos las *funciones discriminantes* como:
+
+$$
+D_j(x;\theta)=\pi_j f(x; \mu_j, \Sigma_j) \quad\text{y}\quad
+D(x;\theta)= \text{max} \{ D_1(x;\theta), \dots D_k(x;\theta) \}
+$${#eq-discriminantes}
+
+Estas funciones pretenden medir que tan *atípica* es una observación.
+
+Utilizando definiciones anteriores @eq-discriminantes, para un $\theta$ dado y una medida de probabilidad $P$, consideramos la función de distribución de $D(\text{·}; \theta)$ y su $\alpha$-cuantil correspondiente:
+
+$$
+G(u; \theta,P) := P(D(\text{·}; \theta) \leq u) \quad\text{y}\quad
+R(\theta,P) := \displaystyle \inf_{u}G(u; \theta,P) \geq \alpha.
+$$
+
+Con esta notación y escritura podemos caracterizar las funciones de asignación y llegar a la siguiente simplificación del problema de clustering robusto.
+
+Buscamos maximizar sobre $\theta$ la función $L(\theta,P)$. que definimos como:
+
+$$
+L(\theta, P):=E_{P}\left[\sum^{k}_{j=1}z_j(\text{·};\theta)\text{log}D_j(\text{·},\theta)\right]
+$${#eq-tclustmax}
+
+Donde las funciones de asignación se obtienen a partir de $\theta$ como:
+
+$$
+z_{j}(x; \theta) = I\{x : \{D(x; \theta) = D_{j}(x; \theta)\} \cap \{D_{j}(x; \theta) \geq R(\theta,P)\}\}
+\quad\text{y}\quad
+z_{0}(x; \theta) = 1 - \sum^{k}_{j=1} z_{j}(x; \theta)
+$$
+
+Es decir, asignamos $x$ a la clase $j$ con el mayor valor de función discriminante $D_{j}(x;\theta)$ o $x$ se elimina cuando todos los $D_{j}(x; \theta)$ (y, en consecuencia, $D(x; \theta)$) son ​​menores que $R(\theta,P)$. (Para desempatar en los valores de la función discriminante, se podría aplicar el orden lexicográfico). Los resultados matemáticos relevantes a considerar están probados en [@garcia2008general].
+
+El Algoritmo TCLUST se puede ver como:
+
+1. Seleccionar aleatoriamente los centroides $m_j^{0}$'s, las matrices de covarianza $S_{j}^{0}$'s y los pesos de los grupos $p_j^{0}$'s para $j=1,...,k$.
+
+2. De los parámetros $\theta^{l} = (p_1^{l},..,p_k^{l},m_1^{l},..,m_k^{l},S_1^{l},..,S_k^{l})$ obtenidos anteriormente.
+
+    - (**Poda**) Obtener las distancias $d_i = D(x_i, \theta^{l})$ para las observaciones $x_1,...,x_n$ y mantener el conjunto $H$ con $[n(1-\alpha)]$ observaciones. 
+
+    - Separar $H$ en $H_1,...,H_k$ con $H_j=\{ x_i \in H: D_j(x_i,\theta^{l})=D(x_i,\theta^{l})\}$.
+
+    - Obtener el número de puntos $n_j$ en $H_j$ y su media muestral y covarianza muestral, $m_j$ y $S_j$, $j=1,..,k$.
+
+    - Considerar la descomposición en valores singulares de $S_j=U_{j}^{'}D_jU_j$ donde $U_j$ es una matriz ortogonal y $D_j$ la matriz diagonal de autovalores. Si el vector de autovalores no satisface la condiciones @eq-rect1 y @eq-rect2, obtenemos usando por ejemplo el Algoritmo de Dykstra's un nuevo vector que si satisfaga esa condición.
+
+    - Actualizar $\theta^{l+1}$ usando: 
+
+        - $p_{j}^{l+1} \leftarrow n_j/[n(1-\alpha)]$
+
+        - $m_{j}^{l+1} \leftarrow m_j$
+
+        - $S_{j}^{l+1} \leftarrow U_{j}^{'}\hat{D}_jU_j$ y $\hat{D}_j = diag(\Lambda_j)^{-1}$.
+
+3. Realizar $F$ iteraciones del proceso descrito en el paso $2$ (valores moderados para $F$ suelen ser suficientes) y calcule la función de evaluación $L(\theta^{F} ;P_n)$ utilizando la expresión @eq-tclustmax.
+
+4. Comenzar desde el paso $1$ varias veces, manteniendo las soluciones que conducen a valores mínimos de $L(\theta^{F} ,P_n)$ para elegir la mejor.
+
+Este algoritmo nos lleva a una asignación óptima, por lo probado en [@garcia2008general]. Como se explicó anteriormente el término $\alpha$ representa la proporción de poda. 
+
+En TCLUST, como se mencionó busca eliminar observaciones que a juicio del modelo sean atípicos, esto lo llevamos a cabo esencialmente con el concepto de *trimm* (en inglés), escencialmente *podamos* los datos, analizamos un subconjunto de los datos originales. Una vez formalizado el algoritmo TCLUST, comparémoslo con PAM para datos simulados @fig-comparacionPAMtclust. Vemos un mejor comportamiento del algoritmo TCLUST para este panorama sencillo de datos simulados.
+
+![Comparación entre PAM y TCLUST, vemos como PAM no puede solucionar este problema con pocos valores atípicos. TCLUST funciona correctamente.](comparacionPamTclust.jpeg){#fig-comparacionPAMtclust width=107%}
+
+**Más simulaciones. K-Means, GMM, TCLUST**
+
+Veremos como se comporta K-means, GMM y el método TCLUST. Las simulaciones son llevadas a cabo usando R-Studio, se agrega en algunos casos para K-means y GMM un cluster más, para ver en que instancias aplicar esta heurística, puede apartar el ruido en un grupo.
+
+**Outliers Dispersos**
+
+A modo de observación simulamos unos datos que tienen $2$ aglomeraciones marcadas @fig-dosclusteres-1 y una nube de puntos que parecen representar ruido y mediciones fallidas.
+
+```{r}  
+#| echo: false
+#| warning: false
+sigma1 <- diag (2) 
+sigma2 <- diag (2) * 8 - 2 
+sigma3 <- diag (2) * 60 
+mixt <- rbind(rmvnorm(360, mean = c (0.0, 0), sigma = sigma1),
+              rmvnorm(540, mean = c (5.0,10), sigma = sigma2),
+              rmvnorm(100, mean = c (2.5, 5), sigma = sigma3))
+```
+
+Aplicando K-means $K=3$ intentando que K-means detecte esos valores corruptos nos encontramos con un mal comportamiento @fig-dosclusteres-2. Evidentemente el algoritmo para $K=2$ @fig-dosclusteres-1 y $K=3$ no presiente outliers, y considera todos los datos *confiables*, en ambos casos K-means no arroja resultados satisfactorios. Ahora haciendo GMM con $K=2$ @fig-dosclusteresgmm-1 se observa que como esperamos GMM si detecta un cluster efectivamente, la segunda agrupación la toma como con el ruido incluido. Para GMM $K=3$ @fig-dosclusteresgmm-2 se toma el ruido como una sola agrupación, y los otros dos clusters se reconocen apropiadamente, con lo cual para este caso la heurística de tomar un cluster más esperando que este reconozca el ruido si funcionó.
+
+```{r}  
+#| echo: false
+kmeans_model_2 <- kmeans(mixt, centers = 2)
+gmm_model_2 <- Mclust(mixt, G = 2) 
+```
+
+```{r}  
+#| echo: false
+trimmed_model<-tclust(mixt, k = 2, alpha = 0.05, restr.fact = 12)
+```
+
+```{r}
+#| echo: false
+kmeans_model_3 <- kmeans(mixt, centers = 3)
+gmm_model_3 <- Mclust(mixt, G = 3) 
+```
+
+```{r}
+#| echo: false
+#| fig-cap: "K-means K=2. Para datos con outliers dispersos."
+p1 <- ggplot(as.data.frame(mixt), aes(x = mixt[,1],y = mixt[,2],color=factor(kmeans_model_2$cluster))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "K-means, outliers dispersos K = 2")+
+  xlab("X") + ylab("Y") + theme_minimal()
+```
+
+```{r}
+#| echo: false
+#| label: fig-dosclusteres
+#| layout-ncol: 2
+#| fig-cap:
+#|   - "K-means K=2. Para datos con outliers dispersos."
+#|   - "K-means K=3. Para datos con outliers dispersos."
+p2 <- ggplot(as.data.frame(mixt), aes(x = mixt[,1],y = mixt[,2],color=factor(kmeans_model_3$cluster))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "K-means, outliers dispersos K = 3")+
+  xlab("X") + ylab("Y") + theme_minimal()
+p1
+p2
+```
+
+```{r}
+#| echo: false
+p3 <- ggplot(as.data.frame(mixt), aes(x = mixt[,1],y = mixt[,2],color=factor(gmm_model_2$classification))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "GMM Cluster, outliers dispersos K = 2") +
+  xlab("X") + ylab("Y") + theme_minimal()
+```
+
+```{r}
+#| echo: false
+#| label: fig-dosclusteresgmm
+#| layout-ncol: 2
+#| fig-cap:
+#|   - "GMM K=2. Para datos con outliers dispersos."
+#|   - "GMM K=3. Para datos con outliers dispersos."
+p4 <- ggplot(as.data.frame(mixt), aes(x = mixt[,1],y = mixt[,2],color=factor(gmm_model_3$classification))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "GMM Cluster, outliers dispersos K = 3") +
+  xlab("X") + ylab("Y") + theme_minimal()
+p3
+p4
+```
+
+```{r, out.width="70%"}
+#| echo: false
+#| label: fig-dosclusterestclust
+#| fig-cap: "TCLUST K=2, para datos con outliers dispersos."
+p3 <- ggplot(as.data.frame(mixt), aes(x = mixt[,1],y = mixt[,2],color=factor(trimmed_model$cluster))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "TCLUST, outliers dispersos K = 2") +
+  xlab("X") + ylab("Y") + theme_minimal()
+p3
+``` 
+
+Vemos que el cluster $0$ es el que usa el método TCLUST para agrupar los outliers @fig-dosclusterestclust, los demás cluster corresponden a las agrupaciones correctamente identificadas. En la libreria de R llamada *tclust* se asocia al cero con los valores atípicos @fig-tclustdata5-2, como es explicado en [@fritz2012tclust].
+
+**Subespacios con ruido**
+
+```{r}
+#| echo: false
+set.seed(123)
+simulate_data_around_line <- function(slope, intercept, noise_sd, num_points) {
+  x <- runif(num_points, 0, 10)
+  y <- slope * x + intercept + rnorm(num_points, mean = 0, sd = noise_sd)
+  return(data.frame(x, y))}
+# Simular datos alrededor de las tres rectas
+line1 <- simulate_data_around_line(slope = 1/2, intercept = 2, noise_sd = 0.3, num_points = 120)
+line2 <- simulate_data_around_line(slope = -1/2, intercept = -2, noise_sd = 0.3, num_points = 120)
+line3 <- simulate_data_around_line(slope = 0, intercept = 0, noise_sd = 0.3, num_points = 120)
+outliers <- data.frame(x = runif(130, 0, 10), y = runif(130, -8, 8))
+x = c(line1[,1],line2[,1],line3[,1],outliers[,1])
+y = c(line1[,2],line2[,2],line3[,2],outliers[,2])
+X <- data.frame(x = x, y = y)
+kmeans_model <- kmeans(X, centers = 3)
+gmm_model <- Mclust(X, G = 3)  
+trimmed_model <- tclust(X, k = 3, alpha = 0.1, restr.fact = 100, 
+                        restr = "eigen",equal.weights = FALSE)
+gmm_clusters <- predict(gmm_model)
+gmm_means <- t(gmm_model$parameters$mean)
+gmm_model_4 <- Mclust(X, G = 4)
+df <- data.frame(x = x, y = y, cluster_gmm = factor(gmm_model$classification),
+                 cluster_kmeans = factor(kmeans_model$cluster),cluster_trimmed = factor(trimmed_model$cluster), 
+                 cluster_gmm_4 = factor(gmm_model_4$classification))
+
+p1 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_kmeans))) +
+      geom_point() + scale_color_discrete(name = "Cluster") +
+      labs(title = "K-means, subespacios K=3") + theme_minimal()
+```
+
+Veremos como se comporta el modelo para subespacios de una determinada forma, en un ejemplo muy interesante donde es de interés ver si se reconocen los patrones que subyacen en los datos. K-means con $3$ clusters no detecta ningún cluster, @fig-subespaciosk3-1. Si se detectó un cluster correctamente usando GMM como se ve en @fig-subespaciosk3-2, con un cluster más $K=4$ usando GMM no se reconocen satisfactoriamente los grupos como vemos en la @fig-subespaciosk4-1. Si se logró usando clustering robusto TCLUST, detectar el ruido representado por el cluster rojo y las tres otras agrupaciones, observando la @fig-subespaciosk4-2. En la libreria de R llamada *tclust* se asocia al cero con los valores atípicos, como es explicado en [@fritz2012tclust].
+
+```{r}
+#| echo: false
+#| label: fig-subespaciosk3
+#| layout-ncol: 2 
+#| fig-cap:
+#|   - "K-means para subespacios K=3."
+#|   - "GMM  para subespacios K=3."
+p2 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_gmm))) +
+      geom_point() + scale_color_discrete(name = "Cluster") +
+      labs(title = "GMM, subespacios K = 3") + theme_minimal()
+p1
+p2
+```
+
+```{r}
+#| echo: false
+p3 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_gmm_4))) +
+      geom_point() + scale_color_discrete(name = "Cluster") +
+      labs(title = "GMM, subespacios K = 4") + theme_minimal()
+```
+
+```{r}
+#| echo: false
+#| label: fig-subespaciosk4
+#| layout-ncol: 2
+#| fig-cap:
+#|   - "GMM para subespacios K=4."
+#|   - "TCLUST para subespacios K=3."
+p4 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_trimmed))) +
+      geom_point() + scale_color_discrete(name = "Cluster") +
+      labs(title = "TCLUST, subespacios K = 3") + theme_minimal()
+p3
+p4
+```
+
+**Simulación M5data**
+
+```{r}
+#| echo: false
+data("M5data")
+X <- M5data[, 1:2]
+kmeans_model=kmeans(X, centers = 3)
+gmm_model <- Mclust(X, G = 3)  
+trimmed_model <- tclust(X,k=3,alpha=0.1,restr.fact = 100, 
+                        restr="eigen",equal.weights=FALSE)
+
+gmm_clusters <- predict(gmm_model)
+gmm_means <- gmm_model$parameters$mean
+gmm_means <- t(gmm_means)
+gmm_model_4 <- Mclust(X, G = 4)
+df <-data.frame(x=X[,1],y=X[,2],cluster_gmm=factor(gmm_model$classification),
+                 cluster_kmeans=factor(kmeans_model$cluster),cluster_trimmed = factor(trimmed_model$cluster),
+                 cluster_gmm_4=factor(gmm_model_4$classification))
+
+p1 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_kmeans))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "K-means K=3. M5data")
+```
+
+El conjunto de datos que vemos en la @fig-kmeans_3_Mdata-1 son datos generados por el conjunto de datos *M5data* del software estadístico R-Studio. Se observan $3$ agrupaciones marcadas y un ruido en todos los datos. Cuando hacemos K-means con $K=3$ se identifica sólo un grupo correctamente @fig-kmeans_3_Mdata-1, usando GMM $K=3$ se identifican satisfactoriamente $3$ grupos, pero no *reconoce* el ruido presente y lo agrupa dentro del cluster mas razonable @fig-kmeans_3_Mdata-2. Usando GMM con $4$ grupos el modelo no logra agrupar el ruido presente en un cluster @fig-tclustdata5-1, pues en el marco del problema el modelo no se dedica a *buscar* valores atípicos. Con TCLUST vemos que efectivamente si aprende la matriz de covarianzas y se reconocen los outliers. En la libreria de R llamada *tclust* se asocia al cero con los valores atípicos @fig-tclustdata5-2, como es explicado en [@fritz2012tclust].
+
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| label: fig-kmeans_3_Mdata 
+#| fig-cap:
+#|   - "K-means K=3."
+#|   - "GMM K=3."
+p2 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_gmm))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "GMM K=3. M5data") 
+p1
+p2
+```
+
+
+```{r}
+#| echo: false
+# Gráfico para cluster_gmm
+p3 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_gmm_4))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "GMM K=4. M5data") 
+```
+
+
+```{r}
+#| echo: false
+#| label: fig-tclustdata5
+#| layout-nrow: 2
+#| fig-cap:
+#|   - "GMM K=4 para datos con ruido"
+#|   - "TCLUST K=3 para datos con ruido"
+p4 <- ggplot(df, aes(x = x, y = y, color = factor(cluster_trimmed))) +
+  geom_point() + scale_color_discrete(name = "Cluster") +
+  labs(title = "TCLUST K=3. M5data") 
+p3
+p4
+```
+
+Por lo visto en los ejemplos y panoramas presentados concluimos que el método TCLUST logra aprender los centros y la forma de las agrupaciones estimando las matrices de covarianzas de los grupos, además de reconocer los datos atípicos robustesiendo el algoritmo de clustering. Se presencia la necesidad con datos simulados de emplear alternativas robustas para obtener resultados más precisos y se evidencia como no emplear clustering robusto puede sesgar nocivamente los resultados. Ahora en más y habiendo justificado con varias simulaciones de la necesidad y capacidad del algoritmo TCLUST optaremos por usar este algoritmo en los datos reales.

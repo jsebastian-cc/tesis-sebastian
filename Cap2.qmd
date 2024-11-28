@@ -1,0 +1,711 @@
+---
+filters:
+  - pseudocode
+pseudocode:
+  alg-title: "Pseudocódigo"
+  alg-prefix: "fff"
+
+header-includes:
+  - \usepackage[ruled,algochapter,vlined,linesnumbered]{algorithm2e}
+
+include-in-header:
+  text: |
+    \usepackage{xeCJK}
+    \usepackage{mathtools}
+---
+
+# Preprocesamiento y Extracción de Parámetros 
+
+```{python}
+#| echo: false
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+```
+
+En el ámbito del aprendizaje automático, el preprocesamiento de datos desempeña un papel fundamental al garantizar la calidad y la idoneidad de los datos para su análisis. Este paso crucial implica la limpieza y transformación de los datos crudos, permitiendo así que los algoritmos de machine learning puedan interpretar patrones de manera más efectiva. La calidad de los resultados obtenidos está directamente vinculada a la calidad de los datos procesados, ya que problemas como valores atípicos, datos faltantes o escalas inconsistentes pueden afectar negativamente el rendimiento de los modelos. Además, el preprocesamiento facilita la interpretación y generalización de los modelos, contribuyendo a la creación de sistemas más precisos y robustos. Por lo tanto, el preprocesamiento de datos no solo es necesario, sino esencial para maximizar el rendimiento y la eficacia de los modelos de machine learning.
+
+Por lo general en el inicio de este preprocesamiento se recurre a técnicas de reducción de la dimensionalidad cuyo empleo es imperativo en el machine learning pues la presencia de un gran número de características o variables puede generar una complejidad abrumadora en los modelos, al reducir la dimensionalidad se busca simplificar la representación de los datos sin perder información esencial, lo que conduce a modelos más eficientes y generalizables. 
+
+## Valores atípicos
+
+La presencia de valores atípicos en los datos representa un desafío significativo en el campo del aprendizaje automático, ya que puede distorsionar la interpretación y el rendimiento de los modelos. Estos valores extremos pueden afectar adversamente la precisión y la robustez de los algoritmos, ya que pueden ejercer una influencia desproporcionada en la formulación de patrones y decisiones del modelo.
+
+La detección y gestión de valores atípicos son cruciales durante el preprocesamiento de datos, ya que estos pueden introducir sesgos y errores en la fase de entrenamiento. Los modelos pueden ser particularmente sensibles a valores atípicos, lo que puede resultar en la generación de patrones no representativos y, por ende, en predicciones menos precisas.
+
+La detección de valores atípicos puede empezar con un simple vistazo de los datos en algunas instancias o variables, para de esta manera hacerse una idea de la problemática presente en como los datos atípicos se están manifestando.
+
+A continuación veremos en un contexto de series de tiempo como pueden detectarse y tratarsen los valores atípicos. Estudiaremos dos propuestas robustas para estimar la media y el desvío estándar poblacionales y luego expondremos el filtro Hampel para la detección de valores atípicos en series de tiempo.
+
+### Filtro Hampel {#sec-filtro_hampel}
+
+En el marco de series de tiempo de datos de satélite se pueden presentar errores de medición y datos que parecen estar contaminados, esto genera un sesgo nocivo para detectar patrones intrínsecos en los datos. Quizá una manera eficaz para detectar estos valores atípicos y eliminarlos es el filtro de Hampel, cuya finalidad es la reducción de ruido la cual es un paso típico de preprocesamiento para mejorar los resultados.
+
+Antes de la presentación formal del filtro Hampel  debemos remarcar que en el contexto de la estadistica robusta [@rey2012introduction] la mediana de una cierta muestra es una estimación más robusta que la media muestral tradicional, este último estadístico padece la presencia de valores atípicos en datos con gran cantidad de ruido. Así mismo existen versiones robustas para la desviación estándar $\sigma$, presentaremos en este trabajo estadísticos robustos para la desviación estándar poblacional uno que se construye precisamente usando la mediana de la muestra y otro que se basa en el concepto de *trimming*.
+
+Las definiciones de los estadísticos de la Media, los estadísticos de orden, la mediana y el desvío estándar muestrales si bien son ampliamente conocidas las damos a continuación, junto con el estadísticos robustos que se estudian en esta tesis para estimar la media y la desviación estándar poblacionales $\mu$ y $\sigma$ respectivamente. 
+
+Para una muestra aleatoria $X_1, X_2, X_3, \dots , X_n$, definimos:
+
+- **Media muestral:** 
+$$
+\overline{X} = \dfrac{\displaystyle \sum_{i=1}^{n} X_i}{n}
+$${#eq-mediamuestral}
+
+
+- **Estadísticos de Orden:** Definimos $X_{(k)}$ como el estadístico de orden $k-$ ésimo de una muestra. Es decir, el $k-$ ésimo valor más pequeño de la muestra. De esta manera por ejemplo:
+
+$$
+X_{(1)}= \min\{X_1, X_2, X_3, \dots , X_n \}
+$${#eq-minimo}
+
+$$
+X_{(n)}= \max\{X_1, X_2, X_3, \dots , X_n \}
+$${#eq-maximo}
+
+Por lo tanto, el estadístico definido en @eq-minimo es el minimo de la muestra y @eq-maximo representa el máximo de la muestra.
+
+- **Mediana muestral:** Definimos la mediana de la muestra como *la mitad* de los datos. Más precisamente:
+
+$$
+mediana(X) = \begin{cases} X_{(\frac{n+1}{2})} & \text{si $n$ es impar} 
+                            \\[10pt]
+                            \dfrac{X_{(\frac{n}{2})} + X_{(\frac{n}{2} + 1})}{2} & \text{si $n$ es par}
+              \end{cases}
+$${#eq-mediana}
+
+- **Desvio estándar muestral:**
+$$
+s = \sqrt{\dfrac{\displaystyle \sum_{i=1}^{n}(X_i - \overline{X})^{2}}{n-1}}
+$${#eq-desviomuestral}
+
+
+- **Desviación Absoluta Mediana:** Definimos la desviación Absoluta Mediana ($MAD$ por sus siglas en inglés) de la siguiente manera:
+
+$$
+MAD = mediana |X_i - mediana(X)| 
+$$ {#eq-definition_MAD}
+
+La @eq-definition_MAD se presenta como una versión robusta de la desviación en una muestra que pueda estar contaminada con valores atípicos. 
+
+En la estadística descriptiva [@fernandez2002estadistica], los estadísticos mostrados en la @eq-mediamuestral y la @eq-mediana son los ejemplos más comunes de las llamadas medidas de tendencia central, pues estas pretenden medir *el centro* de los datos estimando de esta forma la media de la población, así mismo los estimadores de la @eq-desviomuestral y la @eq-definition_MAD indican que tanto se dispersan los datos respecto del promedio de los mismos, es decir mide la variabilidad de la población. En la construcción de modelos probabilísticos son de preferencia estimadores cuyas medidas de dispersión sean bajas, dado que variabilidades altas de los estimadores pueden contaminar nocivamente los modelos y las predicciones [@gutmann2010noise].
+
+A modo de visualización del comportamiento de los estimadores robustos propuestos en la @eq-mediana y la @eq-definition_MAD, y los no robustos definidos en la @eq-mediamuestral y la @eq-desviomuestral para estimar parámetros poblacionales $\mu$ y $\sigma$, simulamos datos contaminados y no contaminados para observar la adaptación de los estimadores en los dos marcos distintos @fig-mad, interesa ver si en un contexto de datos sin valores atípicos los estimadores robustos son similares a los convencionales (no robustos) y así mismo es de interés observar si en datos con outliers los estimadores robustos logran mantener la compostura mientras sus pares no robustos pueden verse muy afectados por los datos corruptos.
+
+::: {}
+![Comportamiento de los estimadores Robustos y no robustos propuestos en datos contaminados y no contaminados.](MAD.png){#fig-mad}
+:::
+
+```{python}
+#| echo: false
+#| warning: false
+#| label: fig-medianas
+#| fig-cap: "Comportamiento de los estimadores de la mediana y el MAD para datos contaminados."  
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+
+def mad_2d(data):
+    mediana = np.median(data, axis=0)
+    return np.median(np.abs(data - mediana), axis=0)
+
+# Generación de conjunto de datos con valores atípicos
+np.random.seed(0)
+datos_sin_atipicos = np.random.multivariate_normal([50, 50], [[15, 30], [30, 15]], size=25)
+datos_con_atipicos = np.vstack([datos_sin_atipicos, [[224, 24], [223, 16],[224, 219], [223, 222], [225, 225]]])  # Añadiendo valores atípicos
+# Cálculo de estadísticos no robustos
+media_con_atipicos = np.mean(datos_con_atipicos, axis=0)
+desvio_con_atipicos = np.std(datos_con_atipicos, axis=0, ddof=1)
+
+# Cálculo de estadísticos robustos
+mediana_con_atipicos = np.median(datos_con_atipicos, axis=0)
+mad_con_atipicos = mad_2d(datos_con_atipicos)
+
+# Función para identificar outliers basados en la mediana y MAD
+def identificar_outliers(data, mediana, mad, umbral=7):
+    distancias = np.abs(data - mediana)
+    es_outlier = np.any(distancias > umbral * mad, axis=1)
+    return es_outlier
+
+# Identificación de outliers
+outliers_con_atipicos = identificar_outliers(datos_con_atipicos, mediana_con_atipicos, mad_con_atipicos)
+
+# Visualización de los datos y los estadísticos
+
+def plot_data(data, media, desvio, mediana, mad, outliers, title):
+    plt.scatter(data[~outliers][:, 0], data[~outliers][:, 1], alpha=0.6, label='Datos')
+    plt.scatter(data[outliers][:, 0], data[outliers][:, 1], color='orange', label='Outliers')
+    plt.scatter(*media, color='red', label='Media (no robusto)')
+    plt.scatter(*mediana, color='black', label='Mediana (robusto)')
+    
+    # Elipses para desvío estándar y MAD
+    ellipse = Ellipse(xy=media, width=desvio[0]*2, height=desvio[1]*2, edgecolor='red', fc='None', lw=2, linestyle='--', label='Desvío estándar (no robusto)')
+    plt.gca().add_patch(ellipse)
+    ellipse = Ellipse(xy=mediana, width=mad[0]*2, height=mad[1]*2, edgecolor='black', fc='None', lw=2, linestyle='--', label='MAD (robusto)')
+    plt.gca().add_patch(ellipse)
+    
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+
+# Generar el gráfico solo para los datos con valores atípicos
+plt.figure(figsize=(7, 6))
+plot_data(datos_con_atipicos, media_con_atipicos, desvio_con_atipicos, mediana_con_atipicos, mad_con_atipicos, outliers_con_atipicos, 'Datos con valores atípicos')
+plt.tight_layout()
+plt.show()
+```
+
+Se observa en @fig-mad para datos sin valores atípicos (gráfico izquierdo) un comportamiento similar de los estimadores robustos (en negro) y convencionales no robustos (en rojo) para la estimación de los parámetros poblacionales $\mu$ y $\sigma$, parece que para un marco de datos sin presencia de outliers podemos optar por usar cualquier pareja de estimadores. Para el caso de datos contaminados se presencia una clara corrupción en el estimador de la media $\overline{X}$ no robusto (gráfico de la derecha) pues esta estimación se corre muy hacia la derecha *creyéndole* a los outliers, así mismo para el estimador convencional de $\sigma$ se obtiene un valor muy elevado en la dispersión de los datos, mientras que el $MAD$ se adapta mejor a la verdadera naturaleza de los datos y tolera más aceptablemente los valores atípicos de la muestra. 
+
+Otra versión de estadísticos robustos para los parámetros poblacionales de interés ampliamente usadas y conocidas en la literatura son los estadísticos robustos basados en *Trimming* [@ruppert1980trimmed] (recorte en inglés) los cuales se contruyen ordenando los datos y eliminando un porcentaje determinado de los datos más pequeños y más grandes antes de calcular los estimadores convenciones $\overline{X}$ y $s$. Los estadísticos obtenidos a partir del conjunto de datos reducido (trimeado) son más robustos frente a los outliers. Existen esfuerzos en la literatura para establecer cotas de error y estudiar propiedades de estadísticos trimeados para $\mu$ en [@lugosi2021robust] y [@bickel1965some].
+
+Por lo tanto eliminamos un porcentaje $\alpha$ de los datos más bajos y más altos, siendo $n$ el tamaño de la muestra, los datos recortados serán $k=[\alpha n]$, por lo que los estimadores robustos propuestos serán.
+
+- **Media muestral *Podada*:**
+
+Se recortan $k/2$ observaciones más pequeñas, y la misma cantidad de las observaciones más altas: 
+
+$$
+\overline{X_{trim}} = \dfrac{\displaystyle \sum_{i=1+k/2}^{n-k/2} X_i }{n-k}
+$${#eq-mediamuestral_trimm}
+
+- **Desvio estándar muestral *Podada*:**
+
+Se recortan $k/2$ observaciones más pequeñas, y la misma cantidad de las observaciones más altas: 
+
+$$
+s_{trim} = \sqrt{\dfrac{\displaystyle \sum_{i=1+k/2}^{n-k/2}(X_i - \overline{X_{trim}})^{2}}{n-k-1}}
+$${#eq-desviomuestral_trimm}
+
+
+```{python}
+#| echo: false
+#| label: fig-trimm1
+#| fig-cap: "Comportamiento de los estimadores no robustos y basados en Trimming para datos contaminados, se realizó un trimming del 15 porciento."  
+
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+
+# Generar datos bidimensionales con algunos outliers
+np.random.seed(0)
+data_x = np.random.normal(50, 10, 25)
+data_y = np.random.normal(50, 10, 25)
+outliers_x = np.array([224,223,224, 223, 225])
+outliers_y = np.array([24,16,219, 222, 225])
+data_x_with_outliers = np.concatenate((data_x, outliers_x))
+data_y_with_outliers = np.concatenate((data_y, outliers_y))
+
+alpha = 0.15  # 15% trimming
+
+# Calcular estadísticas clásicas
+mean_x_classic = np.mean(data_x_with_outliers)
+std_x_classic = np.std(data_x_with_outliers)
+mean_y_classic = np.mean(data_y_with_outliers)
+std_y_classic = np.std(data_y_with_outliers)
+
+# Función para calcular la media trimeada y desviación estándar trimeada
+def trimmed_stats(data, alpha):
+    trimmed_mean = stats.trim_mean(data, alpha)
+    trimmed_data = stats.trimboth(data, alpha)
+    trimmed_std = np.std(trimmed_data)
+    return trimmed_mean, trimmed_std
+
+# Calcular estadísticas trimeadas
+mean_x_trimmed, std_x_trimmed = trimmed_stats(data_x_with_outliers, alpha)
+mean_y_trimmed, std_y_trimmed = trimmed_stats(data_y_with_outliers, alpha)
+
+# Visualización gráfica
+plt.figure(figsize=(10, 6))
+plt.scatter(data_x_with_outliers, data_y_with_outliers, label='Outliers', color='orange')
+plt.scatter(data_x, data_y, label='Datos originales')
+
+# Medias y desviaciones estándar clásicas
+plt.errorbar(mean_x_classic, mean_y_classic, xerr=std_x_classic, yerr=std_y_classic,
+             fmt='o', color='red', label='Media y desviación clásica', capsize=5)
+
+# Medias y desviaciones estándar trimeadas
+plt.errorbar(mean_x_trimmed, mean_y_trimmed, xerr=std_x_trimmed, yerr=std_y_trimmed,
+             fmt='o', color='black', label='Media y desviación trimeada', capsize=5)
+
+plt.legend()
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.title('Comparación de Estadísticas Clásicas vs Trimeadas')
+plt.grid(True)
+plt.show()
+```
+
+Se observa un comportamiento errático de los estimadores convencionales (en rojo), mientras que los estadísticos trimeados logran adaptarse más a los datos (en negro).
+
+Volviendo a la explicación del filtro de Hampel, este primero fija una ventana móvil para cada punto $x$ de la muestra compuesta de $K$ vecinos y calcula el $MAD$ de esa ventana, si existe una observación $x^{*}$ talque el $MAD$ de esta y de sus $K$ vecinos es mayor una cierta cantidad de desvíos, entonces este valor $x^{*}$ se considera atípico y se elimina, o se hace lo que se llama en la literatura *imputación* [@donders2006gentle] que consiste reemplazar este valor por el vecino más cercano o alguna función que dependa de sus $k$ vecinos más cercanos, desechando de esta forma datos impuros, daremos más enfoque a este método en la @sec-imputacion.
+
+Para datos normalmente distribuidos $X \sim \mathcal{N}(\mu,\,\sigma^{2})$, un estimador robusto del desvío estándar poblacional $\sigma$ más razonable será $\hat{\sigma} = kMAD$, donde $k\approx 1.4826$. Para demostrar esto primero tomamos: 
+$$
+Y=X-mediana(X)
+$$  {#eq-y_mad}
+
+debemos tener en cuenta que: $|Y| = |X-mediana(X)|=|X-\mu|$  para $X$ cuya distribución es simétrica, pues la mediana coincide con la esperanza $\mu$, por definición de la Desviación Absoluta Mediana ($MAD$), por @eq-y_mad y recordando una vez más que $X$ se distribuye simétricamente tenemos:
+
+$$
+MAD = mediana|X-\mu| = mediana|Y|
+$$ 
+
+Al calcular la mediana de $|X-\mu|$, el $MAD$ al ser en esencia la mediana de la variable aleatoria $|Y|$, debe cumplir que el $50 \%$ de los datos están por debajo del $MAD$, más precisamente:
+
+\begin{equation}
+0.5=P( |Y| <  mediana|Y|)=P(|X-\mu|< MAD)
+\end{equation}
+
+Dividiendo por $\sigma$ tenemos que: 
+$$
+P\left(\frac{|X-\mu|}{\sigma} < \frac{MAD}{\sigma} \right)=0.5
+$$
+
+Obteniendo de esta forma el valor absoluto de una distribución normal estándar $Z=\frac{X-\mu}{\sigma}$, $Z \sim \mathcal{N}(0,1)$, pues $\sigma > 0$:
+
+$$
+P\left(\frac{|X-\mu|}{\sigma} < \frac{MAD}{\sigma} \right)=P\left(|Z|<\frac{MAD}{\sigma} \right)=P\left(Z<\frac{MAD}{\sigma} \right)-P\left(Z< -\frac{MAD}{\sigma} \right)
+$$
+
+Denotamos $\Phi$ como la función de distribución acumulada de una variable aleatoria Normal estándar ($\Phi(x) = P(Z \leq x)$), hemos obtenido:
+
+
+$$
+\Phi \left(\frac{MAD}{\sigma} \right)-\Phi \left(-\frac{MAD}{\sigma} \right)=0.5
+$$
+
+Por simetría de la distribución normal: $\Phi(-MAD/\sigma)=1-\Phi(MAD/\sigma)$, con lo cual resulta: 
+
+$$
+2\Phi \left(\frac{MAD}{\sigma} \right)=1.5
+$$
+
+Multiplicando por $0.5$ y aplicando la inversa de la función $\Phi$ se obtiene:
+
+$$
+\frac{MAD}{\sigma}=\Phi^{-1}(0.75)
+$$ 
+
+Despejando $\sigma$ se obtiene una estimación del mismo: 
+
+$$
+\hat{\sigma}=\frac{MAD}{\Phi^{-1}(0.75)}
+$$ 
+
+Hemos demostrado que el factor $k$ es:
+
+$$
+k = \frac{1}{\Phi^{-1}(0.75)} \approx 1.4826
+$$.
+
+Así que el estimador de $\sigma$ robusto y corregido con un valor de escala bajo la hipótesis de Normalidad de los datos es: 
+
+$$
+\hat{\sigma}=1.4826MAD
+$${#eq-definition_MAD_normal}
+
+
+con $MAD$ definida la en @eq-definition_MAD. El estimador no es insesgado pero si es asintóticamente insesgado, esto es que su sesgo tiende a cero a medida que aumenta el tamaño de la muestra. Para alcanzar la insesgadez para todo $n$ existen modificaciones en la literatura para disminuir el sesgo para muestras finitas [@akinshin2022finite].
+
+Presentamos un código en el lenguaje de programación Pyhton en el que llevamos a cabo el filtro Hampel, se pueden evidenciar los pasos que hemos expuesto anteriormente. En este código se opta por eliminar el valor atípico y dejarlo como un dato faltante, no se hace ningún tipo de imputación.
+
+
+```{python}
+def hampel_filter(data, window_size, threshold):
+    n = len(data)
+    filtered_data = data.copy()
+    for i in range(n):
+        if i < window_size // 2 or i >= n - window_size // 2:
+            continue  
+        window = data[i - window_size // 2:i + window_size // 2 + 1]
+        median = np.median(window)
+        mad= 1.4826*np.median(np.abs(window - median))
+        if np.abs(data[i] - median) > threshold * mad:
+            filtered_data[i] = np.nan
+    return filtered_data
+```
+
+Aplicamos la función del filtro hampel a un ejemplo con datos simulados y vemos que realiza lo esperado @fig-hampel. La serie de tiempo que se ha creado es una superposición de una función trigonométrica y una función normal. Se han agregado outliers intencionalmente con el objetivo de mostrar como el filtro hampel es capaz de detectarlos y eliminarlos. 
+
+```{python}
+#| echo: false
+serie_tiempo = np.sin(np.linspace(0, 10, 100)) + np.random.normal(0, 0.1, 100)
+for index, value in zip([20, 40, 60, 80], [-0.1, 1.9, 2.1, -0.8]):
+    serie_tiempo[index] = value
+```
+
+
+
+```{python}
+window_size = 5
+threshold = 2.5
+serie_filtrada = hampel_filter(serie_tiempo, window_size, threshold)
+```
+
+```{python}
+#| echo: false
+#| label: fig-hampel
+#| fig-cap: "Vemos como el filtro Hampel detecta los saltos abruptos de la serie de tiempo que parecen ser valores atípicos."  
+#| fig-width: 2.0
+import numpy as np
+import matplotlib.pyplot as plt
+x = np.linspace(0,100,100)
+plt.figure(figsize=(4.75,3))
+plt.scatter(x, serie_tiempo,label='Original', marker = 'd',color='m',s=8)
+plt.scatter(x, serie_filtrada, label='Filtrada', color='turquoise', s=10)
+plt.title('Filtro de Hampel en Serie de Tiempo')
+plt.xlabel('Tiempo')
+plt.ylabel('Valor')
+plt.legend()
+plt.show()
+```
+
+
+Vemos como a pesar de detectar valores atípicos @fig-hampel también se eliminan datos que parecen no serlo, el filtro Hampel puede considerar valores no atípicos como atípicos.
+
+## Tratamiento de valores faltantes y Feature Extraction
+
+En machine learning, los valores faltantes en los datos pueden generar problemas graves, como modelos sesgados, disminución en la precisión y dificultades en el análisis. Este problema ocurre cuando ciertas entradas de datos no están registradas, lo que impide que los algoritmos aprendan correctamente. Existen varias técnicas para tratar este problema: 
+
+1. Eliminación de filas o columnas incompletas, lo cual es sencillo pero puede llevar a la pérdida de información valiosa. 
+
+2. Imputación de valores faltantes, donde se sustituyen los datos perdidos por la media, mediana, moda o valores generados por modelos más avanzados como vecinos más cercanos o regresiones. 
+
+3. Uso de modelos que manejan valores faltantes de forma nativa, como algunos árboles de decisión [@khosravi2020handling], que pueden tratar los datos incompletos de forma más robusta, existen múltiples esfuerzos en la literatura que manejan estos problemas en distintos modelos de aprendizaje [@sued2013robust], [@danilov2012robust], [@sued2020robust].
+
+4. Extraer de los datos un cojunto de parámetros y llevar el problema de aprendizaje a esos parámetros, en lo que se conoce como *Feature Extraction*. Alternativa que optamos llevar a cabo en esta tesis.
+
+### Imputación y Suavizado {#sec-imputacion}
+
+**Imputación**
+
+En un conjunto de datos que contiene valores faltantes, es razonable considerar reemplazar estos valores faltantes por valores numéricos teniendo en cuenta las relaciones posibles entre las observaciones vecinas [@donders2006gentle]. Esto implica hacer estimaciones de los valores perdidos y sustituirlos en los lugares donde faltan. A continuación, se describen varios métodos comunes para la imputación de datos:
+
+- *Imputación por el vecino más cercano:*
+
+ Esta técnica reemplaza el valor faltante con el valor más cercano disponible en el conjunto de datos. El vecino más cercano se determina generalmente por la distancia en el espacio de características, y se asume que valores similares están más cerca entre sí. Este método puede ser efectivo cuando los datos presentan alta redundancia y similitud local.
+
+- *Imputación por la media de los valores vecinos:*
+
+ Este método simple consiste en calcular la media de los valores numéricos disponibles que rodean al valor faltante y usar esta media como estimación para el valor perdido. Este enfoque asume que los valores vecinos son representativos del valor faltante y que la media es una buena estimación.
+
+- *Imputación mediante regresión:*
+
+En este método, se utiliza una regresión basada en los valores numéricos disponibles para estimar los valores faltantes. Primero, se desarrolla un modelo de regresión utilizando los datos completos. Luego, se aplican las fórmulas de regresión calculadas para imputar los valores faltantes. Este enfoque puede ser más preciso que la imputación por la media si la relación entre las variables está bien definida.
+
+Es importante destacar que estos métodos de imputación requieren una eliminación previa de valores atípicos adecuada. Los valores atípicos pueden distorsionar las imputaciones si no se manejan correctamente, ya que la confianza en los datos vecinos implica que los valores cercanos sean representativos y no estén influenciados por outliers. Si bien la imputación de valores faltantes puede resolver el problema de los datos incompletos, no tratar adecuadamente los valores atípicos puede introducir nuevos problemas y sesgos en el análisis posterior. Por lo tanto, es crucial realizar una limpieza de datos exhaustiva antes de proceder con la imputación.
+
+La imputación en general más aún la creada por el método de regresión lineal para una gran cantidad de valores faltantes puede ser un proceso computacionalmente muy costoso tanto en tiempo como en memoria requerida, además de esto no reduce la dimensionalidad, por lo que si bien ha sido explorado como alternativa escogemos no llevarlo a cabo para la solución del problema, debido a que la eficiencia también juega un factor fundamental en este asunto debido a la gigantesca cantidad de series de tiempo a analizar.
+
+**Suavizado**
+
+La herramienta Suavizado de serie temporal suaviza una variable numérica de una o varias series temporales mediante promedios móviles centrados, hacia delante y hacia atrás, así como un método adaptable basado en regresión lineal local.
+
+Las técnicas de suavizado de series temporales se utilizan ampliamente en múltiples campos como por ejemplo en, procesamiento de señales y otros campos que manejan datos recopilados a lo largo del tiempo. El suavizado de datos temporales a menudo revela tendencias o ciclos a largo plazo mientras suaviza el ruido y las fluctuaciones a corto plazo.
+
+El suavizado de series temporales es aplicable a cualquier serie temporal que se sepa que contienen ruido o fluctuaciones a corto plazo. Por ejemplo, en nuestro caso el índice NDVI puede tener fluctuaciones abruptas de una observación a otras en corto tiempo debido a cualquier inconveniente como errores del satélite, alguna nube que interfiera o cualquier fenómeno que no podemos controlar. A continuación aplicamos el método de suavizado usando el filtro de Savitzky–Golay [@doi:10.1021/ac60214a047]
+
+```{python}
+#| echo: false
+#| warning: false
+#| label: fig-imputacion_suavizado
+#| fig-cap: "Vemos como los outliers en verde sesgan nocivamente la imputación, generando un suavizado defectuoso."  
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
+import random
+
+random.seed(2345679)
+np.random.seed(42)
+n_points = 25
+x = np.linspace(0, 4 * np.pi, n_points)
+y = np.sin(x)
+
+missing_indices = random.sample(range(n_points), 8)
+y_with_nan = y.copy()
+y_with_nan[missing_indices] = np.nan
+
+outlier_indices = random.sample(range(n_points), 4)
+y_with_outliers = y_with_nan.copy()
+y_with_outliers[outlier_indices] = y_with_outliers[outlier_indices] * (-1.2)  
+
+def imputar_nan(data):
+    valid_mask = ~np.isnan(data)
+    interpolated = np.interp(np.arange(len(data)), np.where(valid_mask)[0], data[valid_mask])
+    return interpolated
+
+y_imputed = imputar_nan(y_with_outliers)
+
+# Aplicar suavizado usando Savitzky-Golay
+y_smoothed = savgol_filter(y_imputed, window_length=11, polyorder=3)
+
+plt.figure(figsize=(10, 6))
+x_data = np.linspace(0, 4 * np.pi, 100)
+y_data = np.sin(x_data)
+plt.plot(x_data, y_data, '--', label='Curva Datos Reales', markersize=5)
+plt.plot(x, y_imputed, 'ro', color='orange',label='Datos reales (sin outliers)')
+
+plt.plot(x[missing_indices], y_imputed[missing_indices], 'ro', label='Valores Imputados', markersize=6)
+
+plt.plot(x[outlier_indices], y_with_outliers[outlier_indices], 'go', label='Outliers', markersize=8)
+
+plt.plot(x, y_smoothed, 'r--', label='Suavizado', linewidth=2)
+plt.legend()
+plt.title('Imputación, Suavizado y Valores Atípicos en una Serie de Tiempo')
+plt.xlabel('Tiempo')
+plt.ylabel('Valor')
+plt.show()
+```
+El filtro de Savitzky–Golay se basa en el cálculo de una regresión polinomial local de grado $k$ para cada ventana que se va tomando. Los valores de $k$ y el ancho de ventana son parámetros del modelo que para el gráfico generado en @fig-imputacion_suavizado tomamos igual como $3$ y $L=11$, donde $L$ es el ancho de ventana. No pretendemos en este trabajo hacer un estudio exhaustivo del método de suavizado del filtro de Savitzky–Golay, pero si lo presentamos porque se consideró como una opción a seguir para suavizar las series de tiempo e intentar robustecerlas, aunque no se terminó optando por este camino debido a que no existe una reducción de la dimensionalidad en este procedimiento y un posterior proceso de clustering podría ser computacionalmente demasiado costoso, para conjuntos de datos voluminosos, y para más de $200$ departamentos. Adicionalmente vemos en @fig-imputacion_suavizado una pobre adaptación a valores atípicos groseros, dándonos poca robustez, si bien el previo tratamiento del filtro Hampel elimina gran parte de los valores atípicos en series de tiempo no se garantiza la perfección en la limpieza para las múltiples series de tiempo analizadas.
+
+### Extracción de Features
+
+Extracción de Features se define como un conjunto de métodos con los que se busca transformar los datos originales a un espacio de menor dimensionalidad, intentando extraer la mayor cantidad de información y almacenando la esencia del conjunto de datos original sin perder información relevante del mismo. Es como destilar los elementos esenciales de un conjunto de datos, ayudando a simplificar y resaltar los aspectos clave mientras se filtran los detalles menos significativos. Es una forma de centrarse en lo que realmente importa de los datos. 
+
+Existen varios métodos conocidos como el Análisis de Componentes Principales (PCA) que se enmarca en un contexto de reducción de la dimensionalidad. En análisis de imágenes, decodificación de texto la extracción de features es de gran relevancia [@daffertshofer2004pca].
+
+En este estudio extraeremos de cada serie de tiempo un conjunto de $8$ parámetros que almacenarán la esencia de la misma, esto nos permite reducir la dimensionalidad extrayendo información importante del dataframe como lo definimos en Extracción de Features. La cantidad de parámetros (igual a $8$) se toma *manualmente*, se pretende tomar de cada serie de tiempo (que suele tener $13$ columnas o más) un conjunto de parámetros menor a $13$ (pues procuramos reducir la dimensionalidad, idealmente la cantidad de parámetros que extraemos debe ser menor al número de columnas). Aunque también buscamos explicar y describir la serie de tiempo (por lo que escoger una cantidad pequeña de parámetros, puede arrojarnos descripciones deficientes). Para este estudio daremos especial importancia a fiteos que logren ser resistentes al fuerte ruido que pueda presentarse.
+
+Se plantean dos métodos de extración de parámetros, que presentamos a continuación. 
+
+### Smooth Splines {#sec-SS}
+
+Este problema se enmarca dentro de los problemas de interpolación. La tarea es construir una curva suave, $g(x)$, que se aproxima a los datos de entrada sin la necesidad de pasar exactamente por cada punto.
+
+Se busca encontrar una función spline $g$ que satisface:
+
+$$
+\sum_{j=1}^{N} [w_{j}(g(x_j)-y_j)]^{2} \leq s,
+$${#eq-ssplines}
+
+donde los datos están fijos y dados por los pares $(x_j, y_j)$, $N$ es la cantidad de datos que se quieren interpolar, las ponderaciones $w_j$ para cada observación $(x_j, y_j)$ son proporcionados por el usuario. Para ello, *scipy.interpolate* permite construir los smoothing splines, basados en la biblioteca Fortran FITPACK de P. Dierckx. [@dierckx1975algorithm].
+
+```{python}
+#| echo: false
+import csv
+import numpy as np
+import time as time
+import pandas as pd
+from datetime import datetime
+from scipy.optimize import curve_fit
+import scipy.interpolate as interpolate
+from scipy import interpolate 
+import matplotlib.pyplot as plt
+from datetime import date
+from scipy.optimize import curve_fit
+from scipy.interpolate import CubicSpline, UnivariateSpline, splrep, splev, BSpline
+
+def robust_std(data):
+    median = np.median(data)
+    abs_deviation = np.abs(data - median)
+    mad = np.median(abs_deviation)
+    robust_std = mad * 1.4826
+    return robust_std
+
+def fit_smooth_spline_s_0(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    tck = splrep(x_no_nan, y_no_nan, s=0)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+
+def fit_smooth_spline_s_1(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    tck = splrep(x_no_nan, y_no_nan, s=0.5)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+
+def fit_smooth_spline_s_2(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    tck = splrep(x_no_nan, y_no_nan, s=0.75)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+
+def fit_smooth_spline_s_005(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    tck = splrep(x_no_nan, y_no_nan, s=0.05)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+
+def fit_smooth_spline_s_0075(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    tck = splrep(x_no_nan, y_no_nan, s=0.075)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+```
+
+El parámetro que controla el grado de suavidad de la curva resultante $g(x)$ y que tan aproximada se encuentra la curva de los datos es $s$. Es decir para $s=0$ corresponde al problema de interpolación donde $g(x_j)=y_j$, aumentar $s$ creará curvas spline mas suaves, pues mayor es la tolerancia que existe en la diferencia $g(x_j)-y_j$.
+
+Encontrar la mejor estimación del parámetro de suavizado $s$ es un intento de prueba y error, si todos los pesos $w_{j}$ son iguales a $1$, una opción razonable podría ser $s \approx m\hat{\sigma}^{2}$, donde $\hat{\sigma}$ es un estimador del desvío estándar [@dierckx1975algorithm].
+
+Se proporciona el código en Python que crea el Smooth Spline para un conjunto de datos, es importante notar que se consideran sólamente los datos cuya imagen, (es decir su segunda coordenada) no es un valor faltante, pues como hipótesis fundamental los datos reales a interpolar $(x_j, y_j)$ deben estar bien definidos. También se debe tener en cuenta que se usa la estimación de la desviación estándar recomendada: $\hat{s} = m\hat{\sigma}^{2}$. 
+
+```{python}
+def fit_smooth_spline_s_std_robust(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    sd_robust = len(x_no_nan)*robust_std(y_no_nan)**2
+    tck = splrep(x_no_nan, y_no_nan, s = sd_robust)
+    spline_smooth = BSpline(*tck, extrapolate=False)   
+    return spline_smooth(x)
+```
+A modo de ilustración veremos como se comporta el fiteo Smooth Splines para una serie de tiempo con datos espurios @fig-smooths-outliers y para datos limpios @fig-smooths. Haciendo uso de distintos valores para el parámetro de suavizado $s$.
+
+```{python}
+#| echo: false
+#| label: fig-smooths-outliers
+#| fig-cap: "Fiteos Smooth Splines para una serie de tiempo con valores atípicos y distintos parámetros de suavizado. No se observa un fiteo aceptable para ninguno de los parámetros usados."
+#| fig-width: 2.5
+
+df_21 = pd.read_csv('prueba_datos_reales.csv.gzip',compression='gzip')
+params = pd.read_csv('prueba_params.csv.gzip',compression='gzip')
+hampel = pd.read_csv('prueba_hampel.csv.gzip',compression='gzip')
+hampel.columns = [col[5:10] for col in hampel.columns]
+index = 0 
+df_row = df_21.iloc[index] 
+x_fit = np.arange(len(df_21.iloc[index])) 
+xref = np.linspace(0, 70, 8)
+plt.figure(figsize=(6.5,4.8));
+plt.plot(hampel.columns, df_row.values, 'k.', label='Serie de Tiempo');
+plt.plot(hampel.columns, fit_smooth_spline_s_0(df_row), 'b--', label='s = 0');
+plt.plot(hampel.columns, fit_smooth_spline_s_1(df_row), 'g--', label='s = 0.5');
+plt.plot(hampel.columns, fit_smooth_spline_s_2(df_row), 'c--', label='s = 0.75');
+plt.plot(hampel.columns, fit_smooth_spline_s_std_robust(df_row), 'r--', label='s = $n\hat{\sigma}^{2}$');
+plt.xticks(rotation=45, ticks=hampel.columns[::2]);
+plt.ylabel('Indice NDVI');
+plt.legend( loc='upper right');
+plt.title('Smoothing Splines Datos Originales');
+plt.ylim(0,1);
+plt.show()
+```
+
+Presentamos una serie de tiempo que corresponde a datos reales del índice NDVI para el departamento Adolfo Alsina de la provincia de Buenos Aires, esta serie de tiempo como observamos no presenta un tratamiento de valores atípicos previo, por lo que se observan cambios abruptos del índice NDVI que parecen ser errores de medición o algún otro problema @fig-smooths-outliers. Para los distintos valores de $s$ vemos los resultados obtenidos, para $s$ chico el fiteo padece la presencia de valores atípicos, y para el parámetro recomendado $s=n\hat{\sigma}^{2}$ la suavidad es mayor pero no se logra explicar la naturaleza de la serie de tiempo muy satisfactoriamente como se presencia en la @fig-smooths-outliers, por lo que está presente siempre este *trade-off* entre tener una sobre-explicación de la serie de tiempo arriesgándose a sufrir el ruido nocivo que pueda manifestarse o solventar este problema aumentando el valor de $s$ dando una explicación quizá mas pobre de la serie de tiempo. El estimador usado para el desvío estándar poblacional es el presentado en la @eq-definition_MAD_normal. 
+
+```{python}
+#| echo: false
+#| label: fig-smooths
+#| fig-cap: "Fiteos Smooth Splines para una serie de tiempo Filtrada mediante Hampel y distintos parámetros de suavizado."
+#| fig-width: 2.5
+
+hampel_row = hampel.iloc[index]  
+x_fit = np.arange(len(df_21.iloc[index])) 
+xref = np.linspace(0, 70, 8)
+plt.figure(figsize=(6,4));
+plt.plot(hampel.columns, hampel_row.values, 'k.', label='Serie de Tiempo');
+plt.plot(hampel.columns, fit_smooth_spline_s_0(hampel_row), 'b--', label='s = 0');
+plt.plot(hampel.columns, fit_smooth_spline_s_0075(hampel_row), 'g--', label='s = 0.075');
+plt.plot(hampel.columns, fit_smooth_spline_s_005(hampel_row), 'c--', label='s = 0.05');
+plt.plot(hampel.columns, fit_smooth_spline_s_std_robust(hampel_row), 'r--', label='s=$n\hat{\sigma}^{2}$');
+plt.xticks(rotation=45, ticks=hampel.columns[::2]);
+plt.ylabel('Indice NDVI');
+plt.legend(loc='lower left');
+plt.title('Smoothing Splines Datos Filtrados');
+plt.ylim(0,1);
+plt.show()
+```
+
+Vemos como para $s=0$ se obtiene un fiteo perfecto @fig-smooths, para datos previamente filtrados parecer ser conveniente usar el fiteo de smooth splines con $s=0$ (o valores cercanos a cero) pues bajo este panorama de datos fiables podemos tener alta o *perfecta confianza*, almacenar la información del fiteo en $8$ parámetros reduciendo de esta forma la dimensionalidad y proseguir con el estudio, pero la calidad de este proceso depende fuertemente de que tan buena sea la performance del tratamiento de datos faltantes, es decir requerimos que el filtro Hampel y otros tratamientos previamente hechos tengan una efectividad del $100 \%$ en el proceso lo cual no se puede garantizar, si se escapan valores atípicos no detectados por el filtro Hampel por ejemplo obteniendo series de tiempo defectuosas, al realizar el fiteo con $s=0$ se pueden obtener una gran cantidad de fiteos contaminados propagando un error nocivo en futuros algoritmos de parendizaje, recordando que debemos tratar millones de series de tiempo no consideramos conveniente arriesgarnos a crear series de tiempo que propaguen ruido en el futuro estudio de aprendizaje no supervizado. Así mismo Smooth Splines no necesariamente tiene en cuenta las restricciones de $f$ y siendo este un problema con condiciones de contorno $0 \leq NDVI \leq 1$ (por lo expuesto en la @sec-ndvi, sólo nos interesará los índices NDVI mayores o iguales a cero dado que los valores negativos indican nubes y agua), pueden crearse fiteos que no respeten estas condiciones y no expliquen los datos satisfactoriamente.
+
+### Ajuste Splines mediante optimización con restricciones. {#sec-trf}
+
+En este sección proponemos un método alternativo que se basa en ajustar un Spline cúbico mediante técnicas de minimización con restricciones. Usando el método TRF explicado en @sec-trfapendice (Trust Region reflective) pretendemos encontrar:
+$$
+\large
+\underset{\text{P} \in \mathbb{R}^{8}}{\arg \min} \text{ $g(P)$} .
+$${#eq-splinetrf}
+
+Donde $g: \mathbb{R}^8 \rightarrow \mathbb{R}$ esta definida por: 
+
+$$
+g(P) =  S(P)[t_j] - y_j .
+$$
+
+Donde $S$ es un spline cúbico definido en $\mathbb{R}$ (los splines cúbicos son funciones suaves, cumpliendo así una hipótesis fundamental del método TRF), $t_j$ es la variable temporal sobre la cual está definida el Spline, $y_j$ representa los datos reales del índice NDVI. Y $P$ es el vector de $8$ parámetros sobre el cual estamos minimizando, la restricción es que cada coordenada del vector $P$ está entre cero y uno. 
+
+Se proporciona un código en lenguaje Python donde se puede evidenciar la propuesta de extracción de parámetros de esta sección, a este método lo apodamos: Splines-TRF. Es importante notar que se consideran sólamente los datos cuya imagen, (es decir su segunda coordenada) no es un valor faltante, pues como hipótesis fundamental los datos reales a interpolar $(x_j, y_j)$ deben estar bien definidos.
+
+```{python}
+def spline_n_params(x, p1, p2, p3, p4, p5, p6, p7, p8):
+    t = np.linspace(0, 70, 8)
+    p = CubicSpline(t, [p1, p2, p3, p4, p5, p6, p7, p8],           
+                        bc_type="natural")
+    return p(x)
+
+def fit_spline_trf(row):
+    x = np.arange(len(row))
+    y = row.values
+    mask = pd.notnull(y)
+    x_no_nan = x[mask]
+    y_no_nan = y[mask]
+    p0 = [0.5] * 8
+    bounds = (0, [1.] * 8)
+    try:
+        popt, pcov = curve_fit(spline_n_params, x_no_nan, 
+                               y_no_nan, p0=p0, bounds=bounds, 
+                               method="trf")
+        return popt
+    except:
+        return np.nan * np.ones(len(p0))
+```
+
+Como podemos observar se crea primero un Spline cúbico y después se minimiza sobre la variable $P = (p_1, p_2 \dots, p_7,p_8)$. De la función *curve_fit* se usa el método *trf*, pues es el método que hemos escogido como se especificó en @eq-splinetrf. Las restricciones están dadas por: $0 \leq p_i \leq 1$ con $i \in \{1,\dots, 8 \}$, como se había definido en @eq-splinetrf. Inicializamos todos los parámetros $p_i$ en $0.5$.
+
+Ahora observemos el comportamiento de este procedimiento en una serie de tiempo de datos reales. Se muestra una aceptable tolerancia bajo valores atípicos del fiteo Splines-TRF representado en rojo, para los datos filtrados se ve una satisfactoria descripción de la naturaleza de la serie de tiempo @fig-fiteostrf.
+
+```{python}
+#| echo: false
+#| label: fig-fiteostrf
+#| fig-cap: "Splines-TRF para datos filtrados con Hampel y datos Originales con outliers."
+#| fig-width: 1
+hampel.columns = [col[:10] for col in hampel.columns]
+xdata= np.linspace(0, 70, 35)
+popt = params.iloc[index].to_list() # parametros del fiteo TRF fila
+df_row = df_21.iloc[index] # datos reales de la fila 
+hampel_row = hampel.iloc[index] # datos filtrados Hampel de la fila
+x_fit = np.arange(len(df_21.iloc[index])) 
+y_fit = spline_n_params(x_fit, *popt)
+popt_with_outliers = fit_spline_trf(df_row)
+y_fit_with_outliers = spline_n_params(x_fit, *popt_with_outliers)
+xref = np.linspace(0, 70, 8);
+plt.figure(figsize=(6.5,5));
+plt.plot(hampel.columns, df_row.values, 'r.', label='Original Data');
+plt.plot(hampel.columns, hampel_row.values, 'b.', label='Hampel Data');
+plt.plot(hampel.columns[16], df_row.values[16], 'b.');
+plt.plot(hampel.columns, y_fit, 'b-', label='Hampel Curve TRF');
+plt.plot(hampel.columns, y_fit_with_outliers, 'r-', label='Original Curve TRF');
+plt.xticks(rotation=45, ticks=hampel.columns[::2]);
+plt.ylabel('Indice NDVI');
+plt.legend(loc="upper right");
+plt.title('Fiteos Splines-TRF');
+plt.ylim(0,1);
+plt.show()
+```
+
+Es importante notar que claramente Splines-TRF es más robusto que Smooth Splines, además el único parámetro libre de Splines-TRF es la cantidad de nodos que pretendemos extraer, en nuestro caso es igual a $8$. En comparación al utilizar Smooth splines como método de extracción de parámetros también tendremos que tomar la decisión sobre cuantos parámetros extraer, además de tener que escoger el parámetro de suavidad $s$, El método presentado (Splines-TRF) no requiere este parámetro. 
+
