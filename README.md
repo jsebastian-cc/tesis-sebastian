@@ -1,5 +1,6 @@
-# tesis-sebastian
-Tesis de Clustering Robusto para Series de tiempo.
+# Thesis on Robust Clustering for Time Series.
+
+This thesis is written in the Quarto environment, where it is possible to compile Latex, Python, R and Julia code.
 
 ### Chapter 2 (Preprocessing and Parameter Extraction) 
 
